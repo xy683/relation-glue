@@ -250,15 +250,8 @@ const server = createServer(async (req, res) => {
       const out = join(dir, 'lines.json');
       try {
         writeFileSync(image, bytes);
-        const ps = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(HERE, 'tools', 'ocr.ps1'), image, out], { windowsHide: true, stdio: 'ignore' });
-        const ended = await new Promise((ok) => {
-          const timer = setTimeout(() => { try { ps.kill(); } catch { /* gone */ } ok('timeout'); }, 60_000);
-          ps.on('exit', () => { clearTimeout(timer); ok('exit'); });
-          ps.on('error', () => { clearTimeout(timer); ok('error'); });
-        });
-        const raw = existsSync(out) ? readFileSync(out, 'utf8') : '';
-        if (!raw) return json(res, ended === 'timeout' ? 504 : 500, { error: '这次没有把图看完，换一张再试试。' });
-        if (raw.includes('"error":"unavailable"')) return json(res, 501, { error: '这台电脑暂时看不清图片里的字，先把文字贴进来吧。' });
+        const raw = process.platform === 'win32' ? await ocrWindows(image, out) : await ocrTesseract(image, bytes);
+        if (!raw) return json(res, 504, { error: '这次没有把图看完，换一张再试试。' });
         const text = logFromOcr(raw, { me: url.searchParams.get('me') ?? '', partner: url.searchParams.get('partner') ?? '' });
         if (!text.trim()) return json(res, 422, { error: '这张图里没有认出能当作对话的字，换一张清楚一点的截图试试。' });
         return json(res, 200, { text, chars: text.length });
@@ -379,3 +372,57 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`关系复原胶  ·  http://localhost:${PORT}`);
   for (const address of addresses) console.log(`              http://${address}:${PORT}  （同一个 Wi-Fi 下的手机打开这个）`);
 });
+/** Windows：系统自带的中文 OCR（PowerShell）。 */
+function ocrWindows(image, out) {
+  return new Promise((ok) => {
+    const ps = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(HERE, 'tools', 'ocr.ps1'), image, out], { windowsHide: true, stdio: 'ignore' });
+    const timer = setTimeout(() => { try { ps.kill(); } catch { /* gone */ } ok(''); }, 60_000);
+    ps.on('exit', () => { clearTimeout(timer); ok(existsSync(out) ? readFileSync(out, 'utf8') : ''); });
+    ps.on('error', () => { clearTimeout(timer); ok(''); });
+  });
+}
+
+/** Linux（云上）：tesseract + chi_sim，把 TSV 里的字框拼回一行行。 */
+function ocrTesseract(image, bytes) {
+  return new Promise((ok) => {
+    const size = pngSize(bytes);
+    const child = spawn('tesseract', [image, 'stdout', '-l', 'chi_sim+eng', '--psm', '6', 'tsv'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', () => { /* 引擎日志不需要 */ });
+    const timer = setTimeout(() => { try { child.kill(); } catch { /* gone */ } ok(''); }, 60_000);
+    child.on('error', () => { clearTimeout(timer); ok(''); });
+    child.on('exit', () => {
+      clearTimeout(timer);
+      const rows = out.split(/\r?\n/).slice(1).map((line) => line.split('\t')).filter((cells) => cells.length >= 12 && cells[0] === '5' && cells[11].trim());
+      const groups = new Map();
+      for (const cells of rows) {
+        const key = `${cells[1]}-${cells[2]}-${cells[3]}-${cells[4]}`;
+        const left = Number(cells[6]);
+        const top = Number(cells[7]);
+        const w = Number(cells[8]);
+        const h = Number(cells[9]);
+        const g = groups.get(key) ?? { x: left, y: top, right: left + w, bottom: top + h, words: [] };
+        g.x = Math.min(g.x, left);
+        g.y = Math.min(g.y, top);
+        g.right = Math.max(g.right, left + w);
+        g.bottom = Math.max(g.bottom, top + h);
+        g.words.push(cells[11].trim());
+        groups.set(key, g);
+      }
+      const lines = [...groups.values()].map((g) => ({ x: g.x, y: g.y, w: g.right - g.x, h: g.bottom - g.y, text: g.words.join(' ') }));
+      ok(JSON.stringify({ width: size.width, height: size.height, lines }));
+    });
+  });
+}
+
+/** PNG 头里量宽高；量不到就返回 0。 */
+function pngSize(buf) {
+  try {
+    if (buf && buf.length > 24 && buf[0] === 0x89 && buf[1] === 0x50) {
+      const view = new DataView(buf.buffer, buf.byteOffset || 0, buf.byteLength);
+      return { width: view.getUint32(16), height: view.getUint32(20) };
+    }
+  } catch { /* 不是 PNG */ }
+  return { width: 0, height: 0 };
+}
