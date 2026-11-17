@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#140b18">
+<title>关系复原胶</title>
+<meta name="description" content="贴一段聊天记录，得到一支十五秒的小人回忆闪片，和一间回到初见的限时房间。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231a1020'/%3E%3Ccircle cx='25' cy='28' r='7' fill='%23ff8a6b'/%3E%3Ccircle cx='41' cy='34' r='7' fill='%236bd5ff'/%3E%3Cpath d='M25 35v10M41 41v8' stroke='%23ffd9a0' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="sky" id="sky" aria-hidden="true"></div>
+
+<main class="wrap">
+  <header class="brand">
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="8.5" cy="9" r="3" fill="#ff8a6b"/><circle cx="15.5" cy="12" r="3" fill="#6bd5ff"/><path d="M8.5 12.5v5M15.5 15.5v4" stroke="#ffd9a0" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </span>
+    <b>关系复原胶</b>
+    <small>RELATIONSHIP GLUE</small>
+  </header>
+
+  <!-- ── 首页 ─────────────────────────────────────────────── -->
+  <section id="home">
+    <h1 class="hero">把你们的故事，<br>泡进<em>十五秒</em>的回忆里。</h1>
+    <p class="lede">贴一段聊天记录，我把它读成一支很短的小人闪片：初识、靠近、分享、沉默，再回到第一次说话的那天。<br><span>没有真人，没有脸，只有两个颜色。</span></p>
+
+    <form id="create" class="card" autocomplete="off">
+      <div class="field">
+        <label for="log">聊天记录 <small>粘贴，或导入文件 / 截图</small></label>
+        <div class="imports">
+          <label class="chip" for="fileText">📄 导入文件</label>
+          <input id="fileText" type="file" multiple hidden accept=".txt,.md,.log,.csv,.json,.html,.htm,text/plain,text/csv,application/json">
+          <label class="chip" for="fileImage">🖼 导入聊天截图</label>
+          <input id="fileImage" type="file" multiple hidden accept="image/*">
+          <span class="imp" id="importState"></span>
+        </div>
+        <textarea id="log" required placeholder="2023-05-01 20:13 我：在吗？&#10;2023-05-01 20:14 小满：在呀，怎么啦&#10;2023-05-02 09:02 我：今天路过一家很好吃的店&#10;…"></textarea>
+        <p class="hint">支持 .txt / .json / .html / .csv，也可以拖进来；截图用本机的文字识别，图片不出这台电脑。</p>
+      </div>
+
+      <div class="field">
+        <label>从应用导入 <small>打开应用 → 选中消息复制 → 粘贴导入</small></label>
+        <div class="apps">
+          <button type="button" class="app" data-app="wechat">微信</button>
+          <button type="button" class="app" data-app="qq">QQ</button>
+          <button type="button" class="app" data-app="douyin">抖音</button>
+          <button type="button" class="app" data-app="kuaishou">快手</button>
+        </div>
+        <div class="guide hidden" id="appGuide"></div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="me">我的昵称</label>
+          <input id="me" type="text" maxlength="24" placeholder="我">
+        </div>
+        <div class="field">
+          <label for="partner">对方备注</label>
+          <input id="partner" type="text" maxlength="24" placeholder="TA">
+        </div>
+      </div>
+      <button class="btn" type="submit" id="go">生成回忆闪片</button>
+      <p class="err hidden" id="err" role="alert"></p>
+      <p class="hint">记录只留在这台服务器上，房间结束就散。请只贴属于你们的对话。</p>
+      <p class="hint hidden" id="lanHint"></p>
+    </form>
+  </section>
+
+  <!-- ── 房间 ─────────────────────────────────────────────── -->
+  <section id="room" class="hidden">
+    <div class="top">
+      <div class="names" id="names"></div>
+      <div class="link" id="presence"></div>
+    </div>
+
+    <!-- 短片舞台：等待与同步播放共用 -->
+    <div class="stage" id="stage">
+      <canvas id="film" width="1080" height="1920" aria-label="十五秒的小人回忆闪片"></canvas>
+      <span class="badge" id="badge">回忆闪片 · 15″</span>
+      <span class="film-title" id="filmTitle">初 遇</span>
+    </div>
+
+    <!-- 等待 TA 进来 -->
+    <div id="view-waiting" class="under-film">
+      <div class="linkbox">
+        <code id="linkText">…</code>
+        <button class="btn pill" id="copyLink" type="button">复制链接</button>
+      </div>
+      <button class="btn" id="copyMain" type="button">复制专属房间链接</button>
+      <p class="waiting" id="waitingText">把这条链接发给 TA。TA 点开，你们就一起看这十五秒。</p>
+    </div>
+
+    <!-- 同步播放中的简短状态 -->
+    <div id="view-film" class="under-film hidden">
+      <p class="waiting">十五秒，一起看。</p>
+    </div>
+
+    <!-- 确认面板 -->
+    <div id="view-confirm" class="hidden">
+      <div class="panel">
+        <span class="tag">🧪 关系复原胶加载完成</span>
+        <h2>是否启动复原胶？</h2>
+        <p>启动后，你们将获得20分钟限时幻境。</p>
+        <p>在这段时间里，暂时抹去后来所有争吵、冷战与遗憾，回到初次相识的状态交流。</p>
+        <p class="faint">幻境结束，一切现实矛盾不会消失。</p>
+        <div class="choice">
+          <button class="btn no" id="decline" type="button">否</button>
+          <button class="btn yes" id="accept" type="button">是</button>
+        </div>
+        <p class="mine" id="confirmWait">等你们两个人的答案。</p>
+      </div>
+    </div>
+
+    <!-- 一方说了否 -->
+    <div id="view-declined" class="hidden">
+      <div class="panel">
+        <span class="tag">🍬 复原胶没有打开</span>
+        <h2>这一次，就先到这里。</h2>
+        <p>那层薄薄的胶还没有干透。</p>
+        <p class="faint">有些话，也许要等一个更合适的时刻。</p>
+      </div>
+    </div>
+
+    <!-- 聊天室 -->
+    <div id="view-chat" class="chat hidden">
+      <p class="ambient">当前记忆状态：初遇，后来的故事暂时还没有发生</p>
+      <div class="countdown"><span>幻境剩余</span><b id="clock">20:00</b></div>
+      <div class="messages" id="messages">
+        <p class="empty" id="chatEmpty">你们刚刚认识。<br>说点什么都可以。</p>
+      </div>
+      <form class="composer" id="composer" autocomplete="off">
+        <textarea id="input" rows="1" maxlength="500" placeholder="像第一次说话那样…"></textarea>
+        <button class="send" type="submit" id="send" aria-label="发送">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-8-6 16-2.5-6.5L4 12z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- 结束 -->
+    <div id="view-ended" class="hidden">
+      <div class="panel end">
+        <span class="tag">⏱️ 关系复原胶失效</span>
+        <h2>刚才你们短暂回到初见</h2>
+        <p>可现实里的委屈、隔阂依旧存在。</p>
+        <p>要不要和好、要不要继续，交给现实里的你们自己决定。</p>
+        <div class="seal">终</div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    一个不劝和、不劝分、不替你们说话的小工具<br>
+    十五秒的回忆，二十分钟的初见
+  </footer>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="/film.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

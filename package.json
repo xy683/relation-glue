@@ -1,0 +1,12 @@
+{
+  "name": "relation-glue",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "关系复原胶：十五秒回忆闪片与二十分钟初见房间",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/core.test.mjs tests/importers.test.mjs"
+  }
+}
