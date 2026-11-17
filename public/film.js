@@ -253,6 +253,60 @@
     ctx.restore();
   }
 
+
+/* ── 头像演片：把人像当成演员，慢推、呼吸、边缘柔化、暖光贴边 ── */
+const portraitImages = new Map();
+function portraitReady(set) {
+  return set.every((src) => {
+    let item = portraitImages.get(src);
+    if (!item) { item = new Image(); item.src = src; item.onload = () => { item.ready = true; }; portraitImages.set(src, item); }
+    return item.ready;
+  });
+}
+
+function portrait(ctx, src, x, y, w, h, alpha, tilt, t, side) {
+  const img = portraitImages.get(src);
+  if (!img || !img.ready) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.rotate(tilt);
+
+  /* 呼吸：极慢的推拉，避免“贴图”感 */
+  const breath = 1 + Math.sin(t / 2600 + side * 1.4) * 0.012;
+  ctx.scale(breath, breath);
+
+  /* 椭圆形柔边遮罩 */
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+  ctx.save();
+  ctx.clip();
+  const s = Math.max(w / img.width, h / img.height);
+  ctx.drawImage(img, -(img.width * s) / 2, -(img.height * s) / 2, img.width * s, img.height * s);
+  /* 边缘压暗，让轮廓融进背景 */
+  const fade = ctx.createRadialGradient(0, 0, Math.min(w, h) * 0.32, 0, 0, Math.max(w, h) * 0.55);
+  fade.addColorStop(0, 'rgba(0,0,0,0)');
+  fade.addColorStop(1, 'rgba(8,4,10,0.92)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(-w / 2, -h / 2, w, h);
+  /* 一道缓慢扫过的高光 */
+  const sweep = ((t / 9000 + side * 0.4) % 1) * 2 - 1;
+  const light = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+  light.addColorStop(0, 'rgba(255,220,190,0)');
+  light.addColorStop(0.5, `rgba(255,220,190,${0.10 + Math.abs(sweep) * 0.05})`);
+  light.addColorStop(1, 'rgba(255,220,190,0)');
+  ctx.fillStyle = light;
+  ctx.fillRect(-w / 2, -h / 2, w, h);
+  ctx.restore();
+
+  /* 暖色轮廓光 */
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,190,150,0.22)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
   function draw(canvas, story, t) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = W;
@@ -307,11 +361,23 @@
       ['hug', 'hug'],
     ][i];
 
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    figure(ctx, w / 2 - gap / 2, baseY, 1.02, act.a, poses[0], t / 620 + i, 1);
-    figure(ctx, w / 2 + gap / 2, baseY, 1.02, act.b, poses[1], t / 680 + i + 1.7, -1);
-    ctx.restore();
+    const avatarSet = story && Array.isArray(story.avatars) ? story.avatars : [];
+    if (avatarSet.length === 2 && portraitReady(avatarSet)) {
+      const near = i === 4 ? 1 : i === 2 ? 0.9 : 0.6;
+      const leftX = w / 2 - gap / 2 - lerp(40, 0, near);
+      const rightX = w / 2 + gap / 2 + lerp(40, 0, near);
+      const size = i === 3 ? 300 : 340;
+      const dim = i === 3 ? 0.5 : 1;
+      const rise = Math.sin(t / 1500) * 5;
+      portrait(ctx, avatarSet[0], leftX, baseY - 250 + rise, size, size * 1.2, 0.94 * dim, -0.03, t, 0);
+      portrait(ctx, avatarSet[1], rightX, baseY - 262 - rise, size * 1.06, size * 1.26, 0.96 * dim, 0.03, t, 1);
+    } else {
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      figure(ctx, w / 2 - gap / 2, baseY, 1.02, act.a, poses[0], t / 620 + i, 1);
+      figure(ctx, w / 2 + gap / 2, baseY, 1.02, act.b, poses[1], t / 680 + i + 1.7, -1);
+      ctx.restore();
+    }
 
     /* 气泡：每镜最多一句，来自真实聊天记录 */
     const said = story && story.acts && story.acts[i] && story.acts[i].bubbles && story.acts[i].bubbles[0];

@@ -196,3 +196,9 @@ textarea:focus, input[type='text']:focus { border-color: rgba(181, 140, 255, 0.5
 .agent-note { text-align: center; font-size: 11px; color: var(--ink-faint); margin: 8px 0 0; }
 .guide-link { margin: 2px 2px 12px; }
 .guide-link a { color: var(--glue); font-size: 11.5px; text-decoration: none; }
+.avatars { display: flex; gap: 10px; }
+.ava { position: relative; flex: 1; aspect-ratio: 1; border: 1px dashed var(--line); border-radius: 16px; display: grid; place-items: center; color: var(--ink-faint); font-size: 11px; cursor: pointer; overflow: hidden; background: rgba(12,6,15,.35); }
+.ava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+.ava.has { border-style: solid; border-color: rgba(181,140,255,.45); }
+.ava.has img { display: block; }
+.ava.has span { display: none; }

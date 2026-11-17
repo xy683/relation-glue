@@ -284,8 +284,14 @@ const server = createServer(async (req, res) => {
       const lines = log.split(String.fromCharCode(10)).filter((line) => line.trim()).length;
       const media = (log.match(/\[(图片|视频|语音|表情)\]|图片|照片|风景|截图/g) || []).length;
       const seconds = Math.max(15, Math.min(180, Math.round((15 + Math.max(0, lines - 20) * 3 + media * 6) / 3) * 3));
-      story.duration = seconds * 1000;
+      /* 普通模式固定 15 秒；智能体模式才按信息密度拉长 */
+      story.duration = mode === 'agent' ? seconds * 1000 : 15000;
       story.mode = mode;
+      /* 两张头像（可选）：客户端已经缩到 320px 的 dataURL，这里只收 image/jpeg 且不超过 200KB */
+      const avatars = Array.isArray(body.avatars) ? body.avatars.slice(0, 2) : [];
+      story.avatars = avatars
+        .filter((src) => typeof src === 'string' && src.startsWith('data:image/') && src.length < 200_000)
+        .map((src) => src.slice(0, 200_000));
       if (mode === 'agent') {
         /* 请豆包当导演：它给分镜、颜色、音乐的性格；画面与声音还是本地的 */
         const spec = hasKey() ? await designFilm(log, { me: story.me, partner: story.partner }) : null;

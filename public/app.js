@@ -186,6 +186,27 @@
   }
 
   let mode = 'plain';
+  const avatars = { me: '', peer: '' };
+
+  /** 头像缩到 320px 的方形，省流量也够画。 */
+  function readAvatar(file) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const s = 320;
+        const canvas = document.createElement('canvas');
+        canvas.width = s; canvas.height = s;
+        const g = canvas.getContext('2d');
+        const k = Math.max(s / img.width, s / img.height);
+        g.drawImage(img, (s - img.width * k) / 2, (s - img.height * k) / 2, img.width * k, img.height * k);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => resolve('');
+      img.src = url;
+    });
+  }
   let agentReady = false;
 
   /** 智能体模式：没填 Key 时把输入框露出来，填了就去掉。 */
@@ -225,6 +246,18 @@
     $('room').classList.add('hidden');
     bindImports();
     bindModes();
+    avaMe?.addEventListener('change', async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      avatars.me = await readAvatar(file);
+      if (avatars.me) { avaMeImg.src = avatars.me; avaMeBox.classList.add('has'); }
+    });
+    avaPeer?.addEventListener('change', async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      avatars.peer = await readAvatar(file);
+      if (avatars.peer) { avaPeerImg.src = avatars.peer; avaPeerBox.classList.add('has'); }
+    });
     void refreshAgent();
         /* 云端（Linux）没有本地应用可打开：把「从应用导入」收起来，只留粘贴/文件/截图 */
     fetch('/api/health').then((r) => r.json()).then((body) => {
@@ -252,7 +285,7 @@
       button.disabled = true;
       button.textContent = '正在把故事读成十五秒…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, avatars: [avatars.me, avatars.peer].filter(Boolean) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);

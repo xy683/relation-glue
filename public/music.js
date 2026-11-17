@@ -206,6 +206,7 @@
   /** 按豆包给的音乐性格调一次：调性、速度、和弦走向。 */
   function tune(story) {
     const music = (story && story.music) || {};
+    if (!story || story.mode !== 'agent') { music.mood = 'warm'; music.tempo = 68; music.root = 'A'; }
     const roots = { A: 0, C: 3, D: 5, E: 7, F: 8, G: 10 };
     const shift = roots[String(music.root || 'A').toUpperCase()] ?? 0;
     const moods = {
