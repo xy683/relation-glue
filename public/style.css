@@ -187,3 +187,10 @@ textarea:focus, input[type='text']:focus { border-color: rgba(181, 140, 255, 0.5
 
 .hidden { display: none !important; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 2px 14px; }
+.mode { text-align: left; border: 1px solid var(--line); border-radius: 14px; padding: 12px 13px; background: rgba(12, 6, 15, 0.4); color: var(--ink-soft); font: inherit; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+.mode b { display: block; font-size: 13px; color: var(--ink); margin-bottom: 5px; }
+.mode b em { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: rgba(181, 140, 255, 0.18); color: var(--glue); margin-left: 4px; }
+.mode span { font-size: 10.5px; line-height: 1.7; color: var(--ink-faint); }
+.mode.on { border-color: rgba(181, 140, 255, 0.55); background: rgba(181, 140, 255, 0.1); }
+.agent-note { text-align: center; font-size: 11px; color: var(--ink-faint); margin: 8px 0 0; }

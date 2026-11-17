@@ -28,6 +28,8 @@
   let startedAt = 0;
   let seed = 7;
   let nextBeat = 0;
+  let beat = 0.5;
+  let chords = CHORDS;
 
   const rand = () => {
     seed ^= seed << 13; seed >>>= 0;
@@ -173,7 +175,7 @@
 
     const act = actAt(elapsed);
     const beat = 0.5;
-    while (nextBeat < now + 0.32) {
+    while (nextBeat < now + Math.max(0.3, beat * 1.4)) {
       const at = Math.max(now + 0.02, nextBeat);
       const into = elapsed + (at - now) * 1000;
       const actNow = actAt(into);
@@ -201,7 +203,25 @@
 
   const state = { playing: false };
 
+  /** 按豆包给的音乐性格调一次：调性、速度、和弦走向。 */
+  function tune(story) {
+    const music = (story && story.music) || {};
+    const roots = { A: 0, C: 3, D: 5, E: 7, F: 8, G: 10 };
+    const shift = roots[String(music.root || 'A').toUpperCase()] ?? 0;
+    const moods = {
+      quiet: [[45, 57, 60, 64], [45, 57, 60, 64], [41, 53, 57, 60], [40, 52, 55, 59], [45, 57, 60, 64]],
+      warm: CHORDS,
+      hopeful: [[48, 60, 64, 67], [43, 55, 59, 62], [45, 57, 60, 64], [41, 53, 57, 60], [48, 60, 64, 67]],
+      melancholic: [[45, 57, 60, 64], [40, 52, 55, 59], [41, 53, 57, 60], [43, 55, 59, 62], [45, 57, 60, 64]],
+    };
+    const shape = moods[music.mood] || CHORDS;
+    chords = shape.map((chord) => chord.map((n) => n + shift));
+    const tempo = Number(music.tempo) || 72;
+    beat = Math.min(0.75, Math.max(0.36, 60 / tempo));
+  }
+
   function start(story, fromMs = 0) {
+    tune(story);
     try {
       if (!ctx) build();
       if (ctx.state === 'suspended') ctx.resume();
@@ -221,7 +241,7 @@
       const at = base + Math.max(0, i * (ACT / 1000) - offset);
       const dur = ACT / 1000;
       if (at < base) continue;
-      pad(CHORDS[i], at, dur, i === 3 ? 0.035 : 0.06);
+      pad(chords[i], at, dur, i === 3 ? 0.035 : 0.06);
       thump(at, i === 3 ? 0.06 : 0.12);
     }
 

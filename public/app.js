@@ -185,10 +185,47 @@
     });
   }
 
+  let mode = 'plain';
+  let agentReady = false;
+
+  /** 智能体模式：没填 Key 时把输入框露出来，填了就去掉。 */
+  async function refreshAgent() {
+    try {
+      const res = await fetch('/api/agent');
+      const body = await res.json();
+      agentReady = Boolean(body.ready);
+      const field = agentKeyField;
+      if (field) field.classList.toggle('hidden', !(mode === 'agent' && !agentReady));
+      const state = agentState;
+      if (state) state.textContent = agentReady ? ('已接上豆包（' + body.model + '）') : '还差一个豆包 Key：没有它也可以用，短片会走本地分镜。';
+    } catch { /* 网络不好就先不管 */ }
+  }
+
+  function bindModes() {
+    document.querySelectorAll('.mode').forEach((el) => el.addEventListener('click', () => {
+      mode = el.dataset.mode === 'agent' ? 'agent' : 'plain';
+      document.querySelectorAll('.mode').forEach((n) => n.classList.toggle('on', n === el));
+      void refreshAgent();
+    }));
+    agentSave?.addEventListener('click', async () => {
+      const key = agentKey.value.trim();
+      if (!key) return;
+      const res = await fetch('/api/agent/key', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { agentState.textContent = body.error ?? '这串 Key 没存上。'; return; }
+      agentReady = true;
+      agentKeyField.classList.add('hidden');
+      $('agentState').textContent = '已接上豆包（' + body.model + '）';
+      toast('豆包已接上');
+    });
+  }
+
   function home() {
     $('home').classList.remove('hidden');
     $('room').classList.add('hidden');
     bindImports();
+    bindModes();
+    void refreshAgent();
         /* 云端（Linux）没有本地应用可打开：把「从应用导入」收起来，只留粘贴/文件/截图 */
     fetch('/api/health').then((r) => r.json()).then((body) => {
       if (body.platform && body.platform !== 'win32') {
@@ -215,7 +252,7 @@
       button.disabled = true;
       button.textContent = '正在把故事读成十五秒…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);
@@ -328,6 +365,8 @@
     const loop = () => {
       const t = (performance.now() - started) % DURATION;
       film.draw(canvas, story, t);
+      const note = document.getElementById('agentNote');
+      if (note) note.textContent = story && story.agentNote ? story.agentNote : '';
       if (window.GlueMusic && !window.GlueMusic.playing) window.GlueMusic.start(story, t);
       $('filmTitle').textContent = film.titleOf(Math.floor(t / 3000));
       room.raf = requestAnimationFrame(loop);

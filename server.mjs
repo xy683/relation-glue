@@ -20,6 +20,7 @@ import { analyze } from './lib/analyzer.mjs';
 import { judge } from './lib/filter.mjs';
 import { logFromOcr } from './lib/ocr.mjs';
 import { decode, detect } from './lib/importers.mjs';
+import { designFilm, hasKey, keyHint, localDesign, saveKey, MODEL } from './lib/agent.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(HERE, 'public');
@@ -260,14 +261,38 @@ const server = createServer(async (req, res) => {
       }
     }
     /* a room from a chat log: the log is read here and never stored whole */
-    if (path === '/api/rooms' && req.method === 'POST') {
+    /* 豆包智能体：有没有 Key、用的是哪个模型 */
+    if (path === '/api/agent' && req.method === 'GET') {
+      return json(res, 200, { ready: hasKey(), model: MODEL, hint: keyHint() });
+    }
+    if (path === '/api/agent/key' && req.method === 'POST') {
+      const body = await readBody(req);
+      const next = String(body.key ?? '').trim();
+      if (!/^[A-Za-z0-9_-]{12,}$/.test(next)) return json(res, 400, { error: '这串 Key 看起来不对（应该是一长串字母数字）。' });
+      saveKey(next);
+      return json(res, 200, { ready: true, model: MODEL, hint: keyHint() });
+    }    if (path === '/api/rooms' && req.method === 'POST') {
       const body = await readBody(req);
       const log = String(body.log ?? '');
       if (log.length < 20) return json(res, 400, { error: '记录太短了，多贴几句吧。' });
       if (log.length > 60_000) return json(res, 400, { error: '记录有点长，先贴最近的一段吧。' });
+      const mode = body.mode === 'agent' ? 'agent' : 'plain';
       let story;
       try { story = analyze(log, { me: String(body.me ?? '').slice(0, 24), partner: String(body.partner ?? '').slice(0, 24) }); }
       catch (e) { return json(res, 400, { error: /** @type {Error} */ (e).message }); }
+      story.mode = mode;
+      if (mode === 'agent') {
+        /* 请豆包当导演：它给分镜、颜色、音乐的性格；画面与声音还是本地的 */
+        const spec = hasKey() ? await designFilm(log, { me: story.me, partner: story.partner }) : null;
+        const designed = spec ?? localDesign(story.seed, story.stats);
+        story.fromAgent = Boolean(spec);
+        story.agentNote = spec ? '豆包定制' : (hasKey() ? '豆包这次没回话，先按本地的来' : '还没填豆包 Key，先按本地的来');
+        designed.acts.forEach((a, i) => {
+          if (story.acts[i]) { story.acts[i].title = a.title; story.acts[i].note = a.note; }
+        });
+        story.palette = designed.palette;
+        story.music = designed.music;
+      }
       const id = randomBytes(9).toString('base64url');
       /** @type {Room} */
       const room = {
