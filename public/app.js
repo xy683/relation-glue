@@ -189,17 +189,20 @@
     $('home').classList.remove('hidden');
     $('room').classList.add('hidden');
     bindImports();
-    /* 手机就在同一个 Wi-Fi 里：把本机的局域网地址直接给出来 */
-    if (/^(localhost|127\.|\[::1\])/.test(location.hostname)) {
-      fetch('/api/health').then((r) => r.json()).then((body) => {
-        const lan = body.lan?.[0];
-        if (body.platform && body.platform !== 'win32') { const field = document.getElementById('appImportField'); if (field) field.classList.add('hidden'); }
-        if (!lan) return;
-        const hint = $('lanHint');
-        hint.textContent = `同一个 Wi-Fi 下，用手机打开：http://${lan}:${body.port}${location.pathname}`;
-        hint.classList.remove('hidden');
-      }).catch(() => {});
-    }
+        /* 云端（Linux）没有本地应用可打开：把「从应用导入」收起来，只留粘贴/文件/截图 */
+    fetch('/api/health').then((r) => r.json()).then((body) => {
+      if (body.platform && body.platform !== 'win32') {
+        const field = document.getElementById('appImportField');
+        if (field) field.classList.add('hidden');
+      }
+      /* 手机就在同一个 Wi-Fi 里：把本机的局域网地址直接给出来 */
+      if (!/^(localhost|127\.|\[::1\])/.test(location.hostname)) return;
+      const lan = body.lan?.[0];
+      if (!lan) return;
+      const hint = $('lanHint');
+      hint.textContent = `同一个 Wi-Fi 下，用手机打开：http://${lan}:${body.port}${location.pathname}`;
+      hint.classList.remove('hidden');
+    }).catch(() => {});
     $('create').addEventListener('submit', async (event) => {
       event.preventDefault();
       const log = $('log').value.trim();
@@ -314,6 +317,7 @@
   function stopFilm() {
     if (room.raf) cancelAnimationFrame(room.raf);
     room.raf = 0;
+    if (window.GlueMusic) window.GlueMusic.stop();
   }
 
   /** 等待的时候，房主先看一支循环的预告；另一个人进来就换成同步的正式播放。 */
@@ -324,6 +328,7 @@
     const loop = () => {
       const t = (performance.now() - started) % DURATION;
       film.draw(canvas, story, t);
+      if (window.GlueMusic && !window.GlueMusic.playing) window.GlueMusic.start(story, t);
       $('filmTitle').textContent = film.titleOf(Math.floor(t / 3000));
       room.raf = requestAnimationFrame(loop);
     };
@@ -336,6 +341,7 @@
     const canvas = $('film');
     const from = state.filmStart - (Date.now() + room.offset);
     const startAt = performance.now() + Math.max(0, from);
+    if (window.GlueMusic) window.GlueMusic.start(state.story, Math.max(0, from));
     const tick = () => {
       const t = performance.now() - startAt;
       if (t >= DURATION) {
