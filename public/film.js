@@ -366,13 +366,13 @@ function portrait(ctx, src, x, y, w, h, alpha, tilt, t, side) {
     const avatarSet = story && Array.isArray(story.avatars) ? story.avatars : [];
     if (avatarSet.length === 2 && portraitReady(avatarSet)) {
       const near = i === 4 ? 1 : i === 2 ? 0.9 : 0.6;
-      const leftX = w / 2 - gap / 2 - lerp(40, 0, near);
-      const rightX = w / 2 + gap / 2 + lerp(40, 0, near);
-      const size = i === 3 ? 300 : 340;
+      const leftX = w * 0.315 - lerp(30, 0, near);
+      const rightX = w * 0.685 + lerp(30, 0, near);
+      const size = i === 3 ? 250 : 280;
       const dim = i === 3 ? 0.5 : 1;
       const rise = Math.sin(t / 1500) * 5;
-      portrait(ctx, avatarSet[0], leftX, baseY - 250 + rise, size, size * 1.2, 0.94 * dim, -0.03, t, 0);
-      portrait(ctx, avatarSet[1], rightX, baseY - 262 - rise, size * 1.06, size * 1.26, 0.96 * dim, 0.03, t, 1);
+      portrait(ctx, avatarSet[0], leftX, baseY - 215 + rise, size, size * 1.2, 0.94 * dim, -0.03, t, 0);
+      portrait(ctx, avatarSet[1], rightX, baseY - 225 - rise, size * 1.06, size * 1.26, 0.96 * dim, 0.03, t, 1);
     } else {
       ctx.save();
       ctx.globalAlpha = 0.9;
