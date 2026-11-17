@@ -363,12 +363,13 @@
     const canvas = $('film');
     const started = performance.now();
     const loop = () => {
-      const t = (performance.now() - started) % DURATION;
+      const total = film.durationOf ? film.durationOf(story) : DURATION;
+      const t = (performance.now() - started) % total;
       film.draw(canvas, story, t);
       const note = document.getElementById('agentNote');
       if (note) note.textContent = story && story.agentNote ? story.agentNote : '';
       if (window.GlueMusic && !window.GlueMusic.playing) window.GlueMusic.start(story, t);
-      $('filmTitle').textContent = film.titleOf(Math.floor(t / 3000));
+      $('filmTitle').textContent = film.titleOf(Math.floor(t / (total / 5)));
       room.raf = requestAnimationFrame(loop);
     };
     loop();
@@ -378,18 +379,19 @@
   function play(state) {
     stopFilm();
     const canvas = $('film');
+    const total = film.durationOf ? film.durationOf(state.story) : DURATION;
     const from = state.filmStart - (Date.now() + room.offset);
     const startAt = performance.now() + Math.max(0, from);
     if (window.GlueMusic) window.GlueMusic.start(state.story, Math.max(0, from));
     const tick = () => {
       const t = performance.now() - startAt;
-      if (t >= DURATION) {
-        film.draw(canvas, state.story, DURATION - 1);
+      if (t >= total) {
+        film.draw(canvas, state.story, total - 1);
         room.raf = 0;
         return;
       }
       film.draw(canvas, state.story, Math.max(0, t));
-      $('filmTitle').textContent = film.titleOf(Math.max(0, Math.floor(t / 3000)));
+      $('filmTitle').textContent = film.titleOf(Math.max(0, Math.floor(t / (total / 5))));
       room.raf = requestAnimationFrame(tick);
     };
     tick();

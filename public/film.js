@@ -8,6 +8,8 @@
   'use strict';
 
   const DURATION = 15000;
+  /** 片长跟着信息密度走：15 秒起，最长 3 分钟。 */
+  const durationOf = (story) => Math.max(15000, Math.min(180000, Number(story && story.duration) || 15000));
   const ACT = 3000;
   const W = 1080;
   const H = 1920;
@@ -263,10 +265,10 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const i = Math.min(4, Math.floor(t / ACT));
-    const local = clamp((t - i * ACT) / ACT, 0, 1);
-    const nextI = Math.min(4, i + 1);
-    const blend = clamp((local - 0.86) / 0.14, 0, 1);
+    const total = durationOf(story);
+    const actLen = total / 5;
+    const i = Math.min(4, Math.floor(t / actLen));
+    const local = clamp((t - i * actLen) / actLen, 0, 1);
     const saidAct = story && story.acts && story.acts[i];
     const pal = story && story.palette;
     const act = Object.assign({}, ACTS[i], { title: (saidAct && saidAct.title) || ACTS[i].title, note: (saidAct && saidAct.note) || ACTS[i].note });
@@ -356,14 +358,14 @@
     ctx.fillStyle = 'rgba(255,230,210,0.16)';
     ctx.fillRect(w * 0.18, barY, w * 0.64, 2);
     ctx.fillStyle = 'rgba(255,190,150,0.75)';
-    ctx.fillRect(w * 0.18, barY, (w * 0.64) * clamp(t / DURATION, 0, 1), 2);
+    ctx.fillRect(w * 0.18, barY, (w * 0.64) * clamp(t / total, 0, 1), 2);
     ctx.fillStyle = 'rgba(255,230,210,0.42)';
     ctx.font = '400 22px "PingFang SC","Microsoft YaHei",sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('十五秒的回忆', w / 2, barY + 44);
+    ctx.fillText(Math.round(total / 1000) + ' 秒的回忆', w / 2, barY + 44);
 
     ctx.restore();
   }
 
-  window.GlueFilm = { draw, DURATION, titleOf: (i) => ACTS[Math.max(0, Math.min(4, i))].title };
+  window.GlueFilm = { draw, DURATION, durationOf, titleOf: (i) => ACTS[Math.max(0, Math.min(4, i))].title };
 })();

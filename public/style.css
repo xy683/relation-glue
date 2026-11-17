@@ -194,3 +194,5 @@ textarea:focus, input[type='text']:focus { border-color: rgba(181, 140, 255, 0.5
 .mode span { font-size: 10.5px; line-height: 1.7; color: var(--ink-faint); }
 .mode.on { border-color: rgba(181, 140, 255, 0.55); background: rgba(181, 140, 255, 0.1); }
 .agent-note { text-align: center; font-size: 11px; color: var(--ink-faint); margin: 8px 0 0; }
+.guide-link { margin: 2px 2px 12px; }
+.guide-link a { color: var(--glue); font-size: 11.5px; text-decoration: none; }

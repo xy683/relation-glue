@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>怎么接入豆包 · 关系复原胶</title>
+<style>
+  :root { --bg:#0d0812; --ink:#f4ece6; --soft:#c7b9c0; --faint:#8f818c; --line:rgba(255,214,190,.14); --glue:#b58cff; --warm:#ffb389; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background: radial-gradient(120% 60% at 50% 0%, #2a1630 0%, #150d1c 55%, #0d0812 100%); color: var(--ink); font: 15px/1.75 "PingFang SC","Microsoft YaHei",system-ui,sans-serif; min-height: 100vh; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 26px 20px 60px; }
+  a.back { color: var(--faint); text-decoration: none; font-size: 12px; }
+  h1 { font-size: 26px; line-height: 1.35; margin: 14px 0 6px; letter-spacing: .5px; }
+  .lede { color: var(--soft); font-size: 13.5px; margin: 0 0 20px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+  .tab { flex: 1; text-align: center; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.03); color: var(--soft); font-size: 13px; cursor: pointer; }
+  .tab.on { border-color: rgba(181,140,255,.6); background: rgba(181,140,255,.12); color: var(--ink); }
+  .step { display: flex; gap: 14px; padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .num { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,179,137,.5); color: var(--warm); display: grid; place-items: center; font-size: 13px; }
+  .step h3 { margin: 2px 0 4px; font-size: 15px; }
+  .step p { margin: 0; color: var(--soft); font-size: 13px; }
+  .step code { background: rgba(255,255,255,.07); padding: 1px 6px; border-radius: 6px; font-size: 12px; }
+  .note { margin-top: 22px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; color: var(--soft); font-size: 12.5px; background: rgba(255,255,255,.03); }
+  .note b { color: var(--ink); }
+  .play { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); border: 0; border-radius: 999px; padding: 13px 24px; background: linear-gradient(135deg,#ffb389,#ff8f6b); color: #2a1219; font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 10px 30px rgba(255,143,107,.25); }
+  .reel { position: fixed; inset: 0; background: #0b0710; display: none; z-index: 20; }
+  .reel.on { display: block; }
+  .reel .slide { position: absolute; inset: 0; padding: 8vh 28px 18vh; opacity: 0; transition: opacity .5s; }
+  .reel .slide.on { opacity: 1; }
+  .reel .kicker { color: var(--warm); letter-spacing: .3em; font-size: 11px; }
+  .reel h2 { font-size: 30px; line-height: 1.3; margin: 16px 0 14px; }
+  .reel p { color: var(--soft); font-size: 16px; line-height: 1.9; }
+  .reel .big { font-size: 44px; font-weight: 700; color: rgba(255,255,255,.08); position: absolute; right: 24px; bottom: 80px; }
+  .bar { position: absolute; left: 28px; right: 28px; bottom: 54px; height: 3px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg,#ffb389,#b58cff); }
+  .reel .hint { position: absolute; left: 28px; bottom: 26px; color: var(--faint); font-size: 11px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back" href="/">← 回到关系复原胶</a>
+  <h1>怎么接入豆包<br>（智能体模式）</h1>
+  <p class="lede">五十秒能讲完的事：拿一个火山方舟的 Key，填进页面，短片就由豆包来定分镜、配色和 BGM。手机和电脑是同一套流程。</p>
+
+  <div class="tabs">
+    <button class="tab on" data-tab="phone">手机接入</button>
+    <button class="tab" data-tab="pc">电脑接入</button>
+  </div>
+
+  <section data-panel="phone">
+    <div class="step"><div class="num">1</div><div><h3>打开火山方舟</h3><p>手机浏览器进 <code>console.volcengine.com/ark</code>，用手机号或抖音登录（新用户有免费额度）。</p></div></div>
+    <div class="step"><div class="num">2</div><div><h3>开通豆包大模型</h3><p>左侧「模型广场」→ 选一个豆包模型 → 点「开通」；再进「推理接入点」确认有一个可用的接入点。</p></div></div>
+    <div class="step"><div class="num">3</div><div><h3>创建 API Key</h3><p>左侧「API Key 管理」→ 创建 API Key → 复制那串以 <code>ek-</code> 开头的字符。只显示一次，先粘到备忘录。</p></div></div>
+    <div class="step"><div class="num">4</div><div><h3>回这里，选智能体模式</h3><p>打开关系复原胶首页 → 点「智能体模式 豆包」→ 把 Key 粘进输入框 → 保存。页面顶部会显示「已接上豆包」。</p></div></div>
+    <div class="step"><div class="num">5</div><div><h3>生成一支定制短片</h3><p>贴聊天记录 → 生成。豆包会把五个镜头的标题、旁白、配色和音乐性格定下来，画面和 BGM 由本机实时画出来、奏出来。</p></div></div>
+  </section>
+
+  <section data-panel="pc" hidden>
+    <div class="step"><div class="num">1</div><div><h3>电脑打开火山方舟</h3><p>浏览器进 <code>console.volcengine.com/ark</code>，注册或登录火山引擎账号。</p></div></div>
+    <div class="step"><div class="num">2</div><div><h3>开通模型与接入点</h3><p>「模型广场」开通豆包模型；「在线推理 / 推理接入点」里记下模型名（默认用 <code>doubao-seed-1-6</code> 这一支）。</p></div></div>
+    <div class="step"><div class="num">3</div><div><h3>创建 API Key</h3><p>「API Key 管理」→ 创建 → 复制 <code>ek-</code> 开头的 Key。可以给它起个名字，方便以后撤销。</p></div></div>
+    <div class="step"><div class="num">4</div><div><h3>填进页面</h3><p>打开关系复原胶 → 智能体模式 → 粘贴 Key → 保存。Key 只存在服务器上，不会出现在网页源码里。</p></div></div>
+    <div class="step"><div class="num">5</div><div><h3>验证</h3><p>随便贴一段对话生成一次，片头出现豆包写的分镜（比如「靠近 · 消息开始密起来」）就说明接上了。</p></div></div>
+  </section>
+
+  <div class="note">
+    <b>两件事先说清楚：</b><br>
+    1. 不填 Key 也能用，只是走本地分镜，片上会标「还没填豆包 Key」。<br>
+    2. 这个 Key 是花钱的（按量计费，新账号通常有免费额度）；只给自己用，别贴到公开的地方。
+  </div>
+</main>
+
+<button class="play" id="play">▶ 播放 50 秒演示</button>
+
+<div class="reel" id="reel">
+  <div class="slide"><div class="kicker">关系复原胶 · 智能体模式</div><h2>五十秒，<br>把豆包接进来</h2><p>先去火山方舟拿一个 Key，再回来填上。手机和电脑是同一套流程。</p><div class="big">01</div></div>
+  <div class="slide"><div class="kicker">第一步</div><h2>打开火山方舟</h2><p>手机或电脑浏览器输入<br><b>console.volcengine.com/ark</b><br>用手机号或抖音登录。</p><div class="big">02</div></div>
+  <div class="slide"><div class="kicker">第二步</div><h2>开通豆包模型</h2><p>左侧「模型广场」选一个豆包模型 → 开通。<br>再到「推理接入点」确认有一个能用的。</p><div class="big">03</div></div>
+  <div class="slide"><div class="kicker">第三步</div><h2>创建 API Key</h2><p>左侧「API Key 管理」→ 创建 → 复制 <b>ek-</b> 开头那串。<br>只显示一次，先存备忘录。</p><div class="big">04</div></div>
+  <div class="slide"><div class="kicker">第四步</div><h2>填进页面</h2><p>回到关系复原胶首页 → 点「智能体模式 豆包」→ 粘贴 Key → 保存。<br>顶部出现「已接上豆包」就成了。</p><div class="big">05</div></div>
+  <div class="slide"><div class="kicker">第五步</div><h2>生成定制短片</h2><p>贴聊天记录 → 生成。<br>豆包定分镜、配色、音乐性格；画面和 BGM 在本机实时画出来、奏出来。</p><div class="big">06</div></div>
+  <div class="slide"><div class="kicker">就这样</div><h2>十五秒起，<br>最长三分钟</h2><p>记录越密、图片越多，片子越长。<br>现在去试一支属于你们的。</p><div class="big">07</div></div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="hint">点击任意处退出</div>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  tabs.forEach((tab) => tab.addEventListener('click', () => {
+    tabs.forEach((t) => t.classList.toggle('on', t === tab));
+    document.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== tab.dataset.tab; });
+  }));
+
+  const reel = document.getElementById('reel');
+  const bar = document.getElementById('bar');
+  const slides = [...reel.querySelectorAll('.slide')];
+  let timer = 0;
+  let raf = 0;
+  let index = 0;
+  let startAt = 0;
+
+  function show(i) {
+    slides.forEach((s, n) => s.classList.toggle('on', n === i));
+    index = i;
+    startAt = performance.now();
+  }
+
+  function tick() {
+    const per = 7000;
+    const p = Math.min(1, (performance.now() - startAt) / per);
+    bar.style.width = ((index + p) / slides.length * 100).toFixed(1) + '%';
+    if (p >= 1) {
+      if (index + 1 >= slides.length) { close(); return; }
+      show(index + 1);
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function open() {
+    reel.classList.add('on');
+    bar.style.width = '0%';
+    show(0);
+    tick();
+  }
+
+  function close() {
+    reel.classList.remove('on');
+    cancelAnimationFrame(raf);
+  }
+
+  document.getElementById('play').addEventListener('click', open);
+  reel.addEventListener('click', close);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+</script>
+</body>
+</html>

@@ -280,6 +280,11 @@ const server = createServer(async (req, res) => {
       let story;
       try { story = analyze(log, { me: String(body.me ?? '').slice(0, 24), partner: String(body.partner ?? '').slice(0, 24) }); }
       catch (e) { return json(res, 400, { error: /** @type {Error} */ (e).message }); }
+      /* 片长跟着信息密度走：15 秒起，最长 3 分钟 */
+      const lines = log.split(String.fromCharCode(10)).filter((line) => line.trim()).length;
+      const media = (log.match(/\[(图片|视频|语音|表情)\]|图片|照片|风景|截图/g) || []).length;
+      const seconds = Math.max(15, Math.min(180, Math.round((15 + Math.max(0, lines - 20) * 3 + media * 6) / 3) * 3));
+      story.duration = seconds * 1000;
       story.mode = mode;
       if (mode === 'agent') {
         /* 请豆包当导演：它给分镜、颜色、音乐的性格；画面与声音还是本地的 */
