@@ -327,6 +327,8 @@ function portrait(ctx, src, x, y, w, h, alpha, tilt, t, side) {
     const pal = story && story.palette;
     const act = Object.assign({}, ACTS[i], { title: (saidAct && saidAct.title) || ACTS[i].title, note: (saidAct && saidAct.note) || ACTS[i].note });
     if (pal) { act.bg = [pal.bg1, pal.bg2]; act.a = pal.a; act.b = pal.b; }
+    const nextI = Math.min(4, i + 1);
+    const blend = clamp((local - 0.86) / 0.14, 0, 1);
     const next = Object.assign({}, ACTS[nextI]);
     if (pal) { next.bg = [pal.bg1, pal.bg2]; next.a = pal.a; next.b = pal.b; }
     const r = rng((story && story.seed ? story.seed : 7) + i * 31);
