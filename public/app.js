@@ -193,6 +193,7 @@
     if (/^(localhost|127\.|\[::1\])/.test(location.hostname)) {
       fetch('/api/health').then((r) => r.json()).then((body) => {
         const lan = body.lan?.[0];
+        if (body.platform && body.platform !== 'win32') { const field = document.getElementById('appImportField'); if (field) field.classList.add('hidden'); }
         if (!lan) return;
         const hint = $('lanHint');
         hint.textContent = `同一个 Wi-Fi 下，用手机打开：http://${lan}:${body.port}${location.pathname}`;

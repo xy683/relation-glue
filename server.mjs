@@ -169,6 +169,7 @@ function runPs(script, args, timeoutMs = 90_000) {
 
 /** 各个应用的窗口：list / open / capture。失败时给一句能读的话。 */
 async function appWindow(action, id, out) {
+  if (process.platform !== 'win32') return { ok: false, error: '云端版不支持打开本地应用，请用粘贴、文件或截图导入。' };
   const args = ['-Action', action, '-Hint', id];
   if (out) args.push('-Out', out);
   const line = await runPs('app-window.ps1', args);
@@ -228,7 +229,7 @@ const server = createServer(async (req, res) => {
         rmSync(dir, { recursive: true, force: true });
       }
     }
-    if (path === '/api/health') return json(res, 200, { ok: true, rooms: rooms.size, port: PORT, lan: LAN });
+    if (path === '/api/health') return json(res, 200, { ok: true, rooms: rooms.size, port: PORT, lan: LAN, platform: process.platform });
     /* 一份各应用导出的聊天记录（.txt/.html/.mht/.csv/.json）→ 这个项目认得的「谁：什么」 */
     if (path === '/api/import' && req.method === 'POST') {
       const bytes = await readImage(req, 24 * 1024 * 1024);
