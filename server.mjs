@@ -36,7 +36,7 @@ const LEAD_MS = 1500;
 /** Every room, by its link's id. */
 /* ── 聊天记录 → 回忆脚本 ───────────────────────────────── */
 
-const CONFLICT_RE = /(分手|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见|累了)/;
+const CONFLICT_RE = /(分手|分开|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见|累了|冷静)/;
 const SWEET_RE = /(想你|抱抱|喜欢|爱你|晚安|早安|开心|么么|宝贝|陪你|等你)/;
 
 function parseChatLines(log) {
@@ -655,11 +655,11 @@ const server = createServer(async (req, res) => {
       else if (story.music) story.music.theme = theme;
       story.mode = mode;
       /* 从聊天记录里读情绪的走向：越往后是热恋还是崩，决定分镜的标题和画面冷暖 */
-      const conflictHits = (log.match(/(分手|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见)/g) || []).length;
+      const conflictHits = (log.match(/(分手|分开|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见|冷静)/g) || []).length;
       const warmHits = (log.match(/(想你|抱抱|喜欢|爱你|晚安|早安|开心|想你啦|么么|宝贝)/g) || []).length;
       const lateLines = log.split(String.fromCharCode(10));
       const lateText = lateLines.slice(Math.floor(lateLines.length * 0.6)).join(' ');
-      const lateConflict = /(分手|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见)/.test(lateText);
+      const lateConflict = /(分手|分开|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见|冷静)/.test(lateText);
       story.arc = (lateConflict || (conflictHits >= 2 && conflictHits >= warmHits)) ? 'break' : 'warm';
       story.acts.forEach((act, idx) => {
         const late = idx >= 3;
