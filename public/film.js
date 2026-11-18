@@ -175,6 +175,21 @@
     ctx.restore();
   }
 
+  /** 圆角矩形路径（气泡、光框共用）。 */
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
   /** 气泡：圆角矩形 + 小尾巴，文字按时间一个个打出来。 */
   function bubble(ctx, x, y, text, opts) {
     const size = opts.size || 34;
@@ -374,10 +389,34 @@ function portrait(ctx, src, x, y, w, h, alpha, tilt, t, side) {
       portrait(ctx, avatarSet[0], leftX, baseY - 215 + rise, size, size * 1.2, 0.94 * dim, -0.03, t, 0);
       portrait(ctx, avatarSet[1], rightX, baseY - 225 - rise, size * 1.06, size * 1.26, 0.96 * dim, 0.03, t, 1);
     } else {
+      /* 没有头像时：不画火柴人，做一块「光框」——两个色点像两个人的位置，留白更像海报 */
+      const frameW = w * 0.62;
+      const frameH = h * 0.34;
+      const fx = (w - frameW) / 2;
+      const fy = h * 0.42;
       ctx.save();
+      ctx.globalAlpha = 0.6;
+      const panel = ctx.createLinearGradient(fx, fy, fx + frameW, fy + frameH);
+      panel.addColorStop(0, 'rgba(255,190,150,0.10)');
+      panel.addColorStop(1, 'rgba(120,150,255,0.06)');
+      ctx.fillStyle = panel;
+      roundRect(ctx, fx, fy, frameW, frameH, 36);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,214,180,0.16)';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, fx, fy, frameW, frameH, 36);
+      ctx.stroke();
+
+      const pulse = 1 + Math.sin(t / 900) * 0.04;
       ctx.globalAlpha = 0.9;
-      figure(ctx, w / 2 - gap / 2, baseY, 1.02, act.a, poses[0], t / 620 + i, 1);
-      figure(ctx, w / 2 + gap / 2, baseY, 1.02, act.b, poses[1], t / 680 + i + 1.7, -1);
+      ctx.fillStyle = act.a;
+      ctx.beginPath();
+      ctx.arc(w * 0.4, fy + frameH * 0.52, 46 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = act.b;
+      ctx.beginPath();
+      ctx.arc(w * 0.6, fy + frameH * 0.52, 46 / pulse, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
