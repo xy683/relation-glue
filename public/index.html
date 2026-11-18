@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#140b18">
 <title>阿呦的回忆胶 · 关系复原胶</title>
-<meta name="description" content="贴一段聊天记录，得到一支十五秒的小人回忆闪片，和一间回到初见的限时房间。">
+<meta name="description" content="贴一段聊天记录，得到一支三十秒的 Q 版回忆短片，和一间回到初见的限时房间。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231a1020'/%3E%3Ccircle cx='25' cy='28' r='7' fill='%23ff8a6b'/%3E%3Ccircle cx='41' cy='34' r='7' fill='%236bd5ff'/%3E%3Cpath d='M25 35v10M41 41v8' stroke='%23ffd9a0' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -126,10 +126,10 @@
     <!-- 短片舞台：等待与同步播放共用 -->
     <div class="stage" id="stage">
       <p class="agent-note" id="agentNote"></p>
-      <canvas id="film" width="1080" height="1920" aria-label="十五秒的小人回忆闪片"></canvas>
+      <canvas id="film" width="1080" height="1920" aria-label="三十秒的 Q 版回忆短片"></canvas>
       <video id="filmVideo" class="film-video hidden" playsinline controls loop></video>
       <button type="button" class="sound" id="soundBtn">🔊 点一下开声音</button>
-      <span class="badge" id="badge">回忆闪片 · 15″</span>
+      <span class="badge" id="badge">回忆短片 · 30″</span>
       <span class="film-title" id="filmTitle">初 遇</span>
     </div>
 
@@ -141,13 +141,14 @@
       </div>
       <button class="btn" id="copyMain" type="button">复制专属房间链接</button>
         <button class="btn" id="makeFilm" type="button">确认生成视频（点击后才开始）</button>
+        <a class="chip hidden" id="exportFilm" href="#" download="memory-film.mp4">导出 MP4</a>
         <p class="hint" id="filmState"></p>
-      <p class="waiting" id="waitingText">把这条链接发给 TA。TA 点开，你们就一起看这十五秒。</p>
+      <p class="waiting" id="waitingText">把这条链接发给 TA。TA 点开，你们就一起看这三十秒。</p>
     </div>
 
     <!-- 同步播放中的简短状态 -->
     <div id="view-film" class="under-film hidden">
-      <p class="waiting">十五秒，一起看。</p>
+      <p class="waiting">三十秒，一起看。</p>
     </div>
 
     <!-- 确认面板 -->
@@ -205,7 +206,7 @@
 
   <footer class="foot">
     一个不劝和、不劝分、不替你们说话的小工具<br>
-    十五秒的回忆，二十分钟的初见
+    三十秒的回忆，二十分钟的初见
   </footer>
 </main>
 

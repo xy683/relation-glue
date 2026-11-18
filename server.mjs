@@ -153,9 +153,8 @@ async function runFilmJob(id, opts) {
       .slice(0, 1)
       .map(toUrl);
     const outs = [];
-    for (let i = 0; i < segs.length; i += 1) {
+    const genOne = async (i) => {
       job.phase = 'segments';
-      job.step = i + 1;
       const seg = segs[i];
       seg.refs = charRefs.concat(bgRefs);
       const prompt = [
@@ -191,8 +190,10 @@ async function runFilmJob(id, opts) {
       if (!videoUrl) throw new Error('第 ' + (i + 1) + ' 段超时。');
       const bin = await fetch(videoUrl);
       writeFileSync(join(dir, i + '.mp4'), Buffer.from(await bin.arrayBuffer()));
-      outs.push(join(dir, i + '.mp4'));
-    }
+      outs[i] = join(dir, i + '.mp4');
+      job.step = outs.filter(Boolean).length;
+    };
+    await Promise.all(segs.map((_, i) => genOne(i)));
     job.phase = 'concat';
     const outDir = join(HERE, 'outputs');
     mkdirSync(outDir, { recursive: true });

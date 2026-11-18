@@ -619,6 +619,8 @@
       video.play().catch(() => {});
     }
     if (canvas) canvas.classList.add('hidden');
+    const exp = exportFilm;
+    if (exp) { exp.href = url; exp.classList.remove('hidden'); }
     stopFilm();
   }
   async function confirmFilm() {

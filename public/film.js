@@ -605,7 +605,7 @@ function drawScene(ctx, w, h, story, i, local, t, photos, cuts, total) {
 }
 
   function draw(canvas, story, t) {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
     const w = W;
     const h = H;
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
