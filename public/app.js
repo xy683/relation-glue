@@ -267,7 +267,7 @@
     $('room').classList.add('hidden');
     bindImports();
     bindModes();
-    photos?.addEventListener('change', async (event) => {
+    $('photos')?.addEventListener('change', async (event) => {
       const files = [...(event.target.files || [])].slice(0, 8);
       for (const file of files) {
         const src = await readPhoto(file);
