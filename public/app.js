@@ -209,6 +209,34 @@
       return new Blob([out], { type: 'audio/wav' });
     } catch (e) { return null; }
   }
+  /** 用使用者自己的 Key 把真人照片变成 Q 版；失败就保留原图。 */
+  async function toChibi(dataUrl) {
+    const key = localStorage.getItem('glue.agentKey') || '';
+    if (!key || !dataUrl) return '';
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const res = await fetch('/api/qstyle', {
+        method: 'POST',
+        headers: { 'content-type': blob.type || 'image/jpeg', 'x-agent-key': key },
+        body: blob,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return '';
+      return body.url || '';
+    } catch (e) { return ''; }
+  }
+
+  /** 把前几张照片并行转 Q 版。 */
+  async function stylePhotos(state) {
+    const key = localStorage.getItem('glue.agentKey') || '';
+    if (!key || !photos.length) return;
+    const indexes = photos.map((_, i) => i).slice(0, 4);
+    if (state) state.textContent = '正在把照片变成 Q 版…';
+    const results = await Promise.all(indexes.map((i) => toChibi(photos[i])));
+    let ok = 0;
+    results.forEach((url, k) => { if (url) { photos[indexes[k]] = url; ok += 1; } });
+    if (state) state.textContent = '已选 ' + photos.length + ' 张' + (ok ? '（' + ok + ' 张 Q 版）' : '（Q 版生成失败，用原图）');
+  }
   /** 从音频里找鼓点：20ms 一窗算能量，超过均值 1.6 倍且明显跃升就算一下。 */
   function detectBeats(buffer) {
     try {
@@ -393,6 +421,7 @@
       }
       const state = document.getElementById('photoState');
       if (state) state.textContent = photos.length ? '已选 ' + photos.length + ' 张' : '';
+      void stylePhotos(state);
     });
     /* 手机上：第一次触摸就把音频解锁，否则整片没声音 */
     document.getElementById('agentModel')?.addEventListener('change', (event) => { localStorage.setItem('glue.agentModel', event.target.value); });
@@ -437,12 +466,14 @@
       if (!file) return;
       avatars.me = await readAvatar(file);
       if (avatars.me) { avaMeImg.src = avatars.me; avaMeBox.classList.add('has'); }
+      toChibi(avatars.me).then((url) => { if (url) { avatars.me = url; avaMeImg.src = url; } });
     });
     avaPeer?.addEventListener('change', async (event) => {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       avatars.peer = await readAvatar(file);
       if (avatars.peer) { avaPeerImg.src = avatars.peer; avaPeerBox.classList.add('has'); }
+      toChibi(avatars.peer).then((url) => { if (url) { avatars.peer = url; avaPeerImg.src = url; } });
     });
     void refreshAgent();
         /* 云端（Linux）没有本地应用可打开：把「从应用导入」收起来，只留粘贴/文件/截图 */

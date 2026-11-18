@@ -289,6 +289,52 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return json(res, 500, { error: e instanceof Error ? e.message : '渲染失败' });
       }
+    }    /* 真人照片 → Q 版：用使用者自己的 Key 调 Seedream 图生图 */
+    if (path === '/api/qstyle' && req.method === 'POST') {
+      const key = String(req.headers['x-agent-key'] || '').trim();
+      if (!key) return json(res, 400, { error: '需要你自己的豆包 Key。' });
+      const bytes = await readImage(req, 12 * 1024 * 1024);
+      if (!bytes.length) return json(res, 400, { error: '图片是空的。' });
+      const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+      const mime = isPng ? 'image/png' : 'image/jpeg';
+      const dataUrl = 'data:' + mime + ';base64,' + bytes.toString('base64');
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 120_000);
+      try {
+        const upstream = await fetch('https://ark.cn-beijing.volces.com/api/v3/images/generations', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+          body: JSON.stringify({
+            model: 'doubao-seedream-5-5-261028',
+            prompt: 'Turn this photo into a cute chibi cartoon character: big head, big eyes, small body, flat pastel colors, thick clean outline, sticker style, keep the person recognizable, plain soft background',
+            image: dataUrl,
+            size: '1024x1024',
+            response_format: 'url',
+          }),
+          signal: ctrl.signal,
+        });
+        const raw = await upstream.text();
+        if (!upstream.ok) {
+          let msg = raw.slice(0, 240);
+          try { const j = JSON.parse(raw); msg = j.error?.message || msg; } catch { /* 忽略 */ }
+          return json(res, 502, { error: '豆包图片接口：' + msg });
+        }
+        const body = JSON.parse(raw);
+        const url = body?.data?.[0]?.url;
+        if (!url) return json(res, 502, { error: '豆包没返回图片。' });
+        const imgRes = await fetch(url, { signal: ctrl.signal });
+        if (!imgRes.ok) return json(res, 502, { error: '图片没下载下来。' });
+        const buf = Buffer.from(await imgRes.arrayBuffer());
+        const dir = join(HERE, 'public', 'qstyle');
+        mkdirSync(dir, { recursive: true });
+        const id = randomBytes(8).toString('hex');
+        writeFileSync(join(dir, id + '.png'), buf);
+        return json(res, 200, { url: '/qstyle/' + id + '.png' });
+      } catch (e) {
+        return json(res, 500, { error: '生成失败：' + (e instanceof Error ? e.message : String(e)) });
+      } finally {
+        clearTimeout(timer);
+      }
     }    /* 使用者自己的配乐：音频直接用，视频用 ffmpeg 抽音轨 */
     if (path === '/api/music' && req.method === 'POST') {
       const bytes = await readImage(req, 40 * 1024 * 1024);
@@ -362,10 +408,9 @@ const server = createServer(async (req, res) => {
       /* 两张头像（可选）：客户端已经缩到 320px 的 dataURL，这里只收 image/jpeg 且不超过 200KB */
       const avatars = Array.isArray(body.avatars) ? body.avatars.slice(0, 2) : [];
       const images = Array.isArray(body.images) ? body.images.slice(0, 8) : [];
-      story.images = images.filter((src) => typeof src === 'string' && src.indexOf('data:image/') === 0 && src.length < 400000).slice(0, 8);
+      story.images = images.filter((src) => typeof src === 'string' && (src.indexOf('data:image/') === 0 || src.indexOf('/qstyle/') === 0) && src.length < 400000).slice(0, 8);
       story.avatars = avatars
-        .filter((src) => typeof src === 'string' && src.startsWith('data:image/') && src.length < 200_000)
-        .map((src) => src.slice(0, 200_000));
+        .filter((src) => typeof src === 'string' && (src.indexOf('data:image/') === 0 || src.indexOf('/qstyle/') === 0) && src.length < 400000)
       if (mode === 'agent') {
         /* 请豆包当导演：它给分镜、颜色、音乐的性格；画面与声音还是本地的 */
         const userKey = String(body.agentKey ?? '').trim();
