@@ -308,6 +308,7 @@ const server = createServer(async (req, res) => {
       if (log.length < 20) return json(res, 400, { error: '记录太短了，多贴几句吧。' });
       if (log.length > 60_000) return json(res, 400, { error: '记录有点长，先贴最近的一段吧。' });
       const mode = body.mode === 'agent' ? 'agent' : 'plain';
+      const theme = ['miss', 'warm', 'regret'].includes(String(body.theme)) ? String(body.theme) : 'miss';
       let story;
       try { story = analyze(log, { me: String(body.me ?? '').slice(0, 24), partner: String(body.partner ?? '').slice(0, 24) }); }
       catch (e) { return json(res, 400, { error: /** @type {Error} */ (e).message }); }
@@ -318,6 +319,9 @@ const server = createServer(async (req, res) => {
       /* 普通模式固定 15 秒；智能体模式才按信息密度拉长 */
       story.duration = mode === 'agent' ? seconds * 1000 : 15000;
       story.mode = mode;
+      story.theme = theme;
+      if (mode === 'plain') story.music = { root: 'A', tempo: 68, mood: 'warm', theme };
+      else if (story.music) story.music.theme = theme;
       /* 两张头像（可选）：客户端已经缩到 320px 的 dataURL，这里只收 image/jpeg 且不超过 200KB */
       const avatars = Array.isArray(body.avatars) ? body.avatars.slice(0, 2) : [];
       story.avatars = avatars

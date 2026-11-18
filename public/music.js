@@ -221,6 +221,20 @@
     beat = Math.min(0.75, Math.max(0.36, 60 / tempo));
   }
 
+  /** 手机上必须由一次真实触摸把 AudioContext 解锁，否则永远没声音。 */
+  function unlock() {
+    try {
+      if (!ctx) build();
+      if (ctx.state === 'suspended') ctx.resume();
+      const g = ctx.createGain();
+      g.gain.value = 0.0001;
+      const o = ctx.createOscillator();
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.02);
+      return true;
+    } catch { return false; }
+  }
+
   function start(story, fromMs = 0) {
     tune(story);
     try {
@@ -261,5 +275,5 @@
     } catch { /* ignore */ }
   }
 
-  window.GlueMusic = { start, stop, get playing() { return state.playing; } };
+  window.GlueMusic = { start, stop, unlock, get playing() { return state.playing; } };
 })();

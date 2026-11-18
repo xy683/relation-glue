@@ -247,6 +247,10 @@
     $('room').classList.add('hidden');
     bindImports();
     bindModes();
+    /* 手机上：第一次触摸就把音频解锁，否则整片没声音 */
+    const unlockOnce = () => { try { window.GlueMusic && window.GlueMusic.unlock(); } catch (e) { /* 忽略 */ } };
+    window.addEventListener('pointerdown', unlockOnce, { once: true });
+    window.addEventListener('touchstart', unlockOnce, { once: true });
     $('agentTest')?.addEventListener('click', async () => {
       const key = localStorage.getItem('glue.agentKey') || (document.getElementById('agentKey')?.value ?? '').trim();
       const id = localStorage.getItem('glue.agentId') || (document.getElementById('agentId')?.value ?? '').trim();
@@ -319,7 +323,7 @@
       button.disabled = true;
       button.textContent = '正在把故事读成十五秒…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', avatars: [avatars.me, avatars.peer].filter(Boolean) }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', avatars: [avatars.me, avatars.peer].filter(Boolean) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);

@@ -202,3 +202,4 @@ textarea:focus, input[type='text']:focus { border-color: rgba(181, 140, 255, 0.5
 .ava.has { border-style: solid; border-color: rgba(181,140,255,.45); }
 .ava.has img { display: block; }
 .ava.has span { display: none; }
+select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(12,6,15,.55); color: var(--ink); font: inherit; font-size: 13px; appearance: none; }
