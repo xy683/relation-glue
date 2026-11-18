@@ -336,7 +336,6 @@ const server = createServer(async (req, res) => {
         const designed = spec ?? localDesign(story.seed, story.stats);
         story.fromAgent = Boolean(spec);
         story.agentNote = spec ? (agentId ? '豆包智能体定制' : '豆包定制') : (result.error ? ('豆包：' + result.error) : '没填 Key，先按本地的来');
-        story.agentNote = spec ? '豆包定制' : (userKey ? '豆包这次没回话，先按本地的来' : '没填 Key，先按本地的来');
         designed.acts.forEach((a, i) => {
           if (story.acts[i]) { story.acts[i].title = a.title; story.acts[i].note = a.note; }
         });
