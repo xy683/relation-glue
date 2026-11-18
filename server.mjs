@@ -167,7 +167,7 @@ async function runFilmJob(id, opts) {
         NEGATIVE,
       ].filter(Boolean).join('\n');
       const content = [{ type: 'text', text: prompt }];
-      (seg.refs || []).slice(0, 2).forEach((ref) => { if (ref) content.push({ type: 'image_url', image_url: { url: ref } }); });
+      (seg.refs || []).slice(0, 2).forEach((ref) => { if (ref) content.push({ type: 'image_url', image_url: { url: ref }, role: 'reference_image' }); });
       const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
