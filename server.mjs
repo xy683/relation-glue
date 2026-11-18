@@ -212,9 +212,32 @@ const sameSecret = (a, b) => Boolean(a) && Boolean(b) && a.length === b.length
   && createHash('sha256').update(a).digest('hex') === createHash('sha256').update(b).digest('hex');
 function createOrder(room) {
   const id = randomBytes(6).toString('hex');
-  room.order = { id, amount: ORDER_PRICE, status: 'awaiting', at: Date.now() };
+  room.order = { id, amount: ORDER_PRICE, status: 'awaiting', at: Date.now(), confirmToken: randomBytes(9).toString('base64url') };
   orders.set(id, room);
   return room.order;
+}
+
+/* 有人点「已付款」时，往站长的微信推一条：点链接就算确认到账（不用开后台、不用盯手机）。
+ * GLUE_PUSH_URL 填推送服务的 webhook；GLUE_BASE_URL 填网站根地址。 */
+const PUSH_URL = (() => {
+  const fromEnv = String(process.env.GLUE_PUSH_URL || '').trim();
+  if (fromEnv) return fromEnv;
+  try { return readFileSync(join(HERE, 'push-url.txt'), 'utf8').trim(); } catch { return ''; }
+})();
+const BASE_URL = String(process.env.GLUE_BASE_URL || 'http://124.223.2.216:5178').replace(/\/+$/, '');
+async function pushPaid(room) {
+  if (!PUSH_URL || !room.order) return;
+  const link = BASE_URL + '/pay/confirm?t=' + encodeURIComponent(room.order.confirmToken);
+  const title = '有人付了 ' + room.order.amount + ' 元';
+  const content = '订单 ' + room.order.id + '\n' + room.names.me + ' · ' + room.names.partner + '\n点下面这条确认到账并开始生成：\n' + link;
+  let body;
+  if (/qyapi\.weixin\.qq\.com/.test(PUSH_URL)) body = { msgtype: 'text', text: { content: title + '\n' + content } };
+  else if (/sctapi\.ftqq\.com/.test(PUSH_URL)) body = { title, desp: content };
+  else if (/pushplus/.test(PUSH_URL)) body = { title, content: content.replace(/\n/g, '<br>'), template: 'html' };
+  else body = { title, content };
+  try {
+    await fetch(PUSH_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  } catch { /* 推送失败不影响订单 */ }
 }
 /** 站长确认到账：这里才开始花钱调模型 */
 function beginPaidFilm(room) {
@@ -1073,6 +1096,23 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, url: '/pay/' + kind + '.jpg', bytes: bytes.length });
     }
 
+    /* 站长在微信里点一下：确认到账并开始生成 */
+    if (path === '/pay/confirm' && req.method === 'GET') {
+      const t = String(url.searchParams.get('t') || '');
+      const room = [...orders.values()].find((r) => r.order && r.order.confirmToken && sameSecret(t, r.order.confirmToken));
+      const page = (text) => {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+        res.end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:-apple-system,\'Microsoft YaHei\',sans-serif;background:#f7f3ee;color:#2b2018;padding:48px 24px;line-height:1.9;font-size:16px">' + text + '</body>');
+      };
+      if (!room) return page('链接无效，或者已经被用过了。');
+      if (room.status !== 'waiting') return page('这间房已经不在等待生成了（可能已经处理过）。');
+      if (room.order.status === 'awaiting' || room.order.status === 'review' || room.order.status === 'failed') {
+        beginPaidFilm(room);
+        return page('✅ 已确认到账，开始生成。<br><span style="color:#8a7767;font-size:14px">客户那边会自动看到进度；这次生成 480P、30 秒。</span>');
+      }
+      return page('这笔订单现在的状态是：' + room.order.status + '，不需要再确认。');
+    }
+
     /* 收款服务回调：金额对得上、订单还在等，就自动确认到账并开始生成 */
     if (path === '/api/pay/notify') {
       if (!PAY_TOKEN) return json(res, 503, { error: '还没配置自动到账。' });
@@ -1102,6 +1142,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, {
         auto: Boolean(PAY_TOKEN),
         notifyUrl: '/api/pay/notify?token=' + PAY_TOKEN,
+        push: Boolean(PUSH_URL),
         price: ORDER_PRICE,
       });
     }
@@ -1199,6 +1240,7 @@ const server = createServer(async (req, res) => {
         if (room.order.status === 'awaiting') {
           room.order.status = 'review';
           room.order.reviewAt = Date.now();
+          void pushPaid(room);
         }
         tell(room);
         return json(res, 200, { order: { id: room.order.id, amount: room.order.amount, status: room.order.status } });

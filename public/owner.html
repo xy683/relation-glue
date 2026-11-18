@@ -85,9 +85,12 @@
       if (b.auto) {
         box.innerHTML = '<b>自动放行：已开启</b><br>把收款服务（商户号或免签服务）的回调地址填成：<br>'
           + '<code>' + esc(location.origin + b.notifyUrl) + '</code><br>'
-          + '<span style="color:#8f7d88">回调里带回 out_trade_no 和 amount，服务器核对金额后自动生成，不用你点。</span>';
+          + '<span style="color:#8f7d88">回调里带回 out_trade_no 和 amount，服务器核对金额后自动生成，不用你点。</span>'
+          + '<br><b>微信提醒：' + (b.push ? '已开启' : '未配置') + '</b>'
+          + (b.push ? '<span style="color:#8f7d88">（有人点「已付款」，你的微信会收到一条，点链接即放行）</span>' : '');
       } else {
-        box.innerHTML = '<b>自动放行：未配置</b> —— 现在只能手动确认；接上收款服务的回调后自动生效。';
+        box.innerHTML = '<b>自动放行：未配置</b> —— 现在只能手动确认；接上收款服务的回调后自动生效。<br>'
+          + '<b>微信提醒：' + (b.push ? '已开启' : '未配置') + '</b>';
       }
     } catch (e) { box.textContent = '读不到配置'; }
   }
