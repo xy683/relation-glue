@@ -195,6 +195,21 @@ const adminOk = (url) => {
   if (!ADMIN_KEY || given.length !== ADMIN_KEY.length) return false;
   return createHash('sha256').update(given).digest('hex') === createHash('sha256').update(ADMIN_KEY).digest('hex');
 };
+
+/* 自动放行的回调口令：收款服务把「到账」回调到这个地址，服务器核对金额后自动生成。
+ * 个人静态收款码没有回调，必须接一个有回调的收款服务（商户号或免签服务）。 */
+const PAY_TOKEN = (() => {
+  const fromEnv = String(process.env.GLUE_PAY_TOKEN || '').trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const f = readFileSync(join(HERE, 'pay-token.txt'), 'utf8').trim();
+    if (f) return f;
+  } catch { /* 没有就派生 */ }
+  if (OWNER_KEY) return createHash('sha256').update('glue-pay-v1:' + OWNER_KEY).digest('hex').slice(0, 24);
+  return '';
+})();
+const sameSecret = (a, b) => Boolean(a) && Boolean(b) && a.length === b.length
+  && createHash('sha256').update(a).digest('hex') === createHash('sha256').update(b).digest('hex');
 function createOrder(room) {
   const id = randomBytes(6).toString('hex');
   room.order = { id, amount: ORDER_PRICE, status: 'awaiting', at: Date.now() };
@@ -1058,7 +1073,38 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, url: '/pay/' + kind + '.jpg', bytes: bytes.length });
     }
 
+    /* 收款服务回调：金额对得上、订单还在等，就自动确认到账并开始生成 */
+    if (path === '/api/pay/notify') {
+      if (!PAY_TOKEN) return json(res, 503, { error: '还没配置自动到账。' });
+      if (!sameSecret(String(url.searchParams.get('token') || ''), PAY_TOKEN)) {
+        return json(res, 403, { error: 'token 不对。' });
+      }
+      let body = {};
+      const raw = await readImage(req, 256 * 1024).then((b) => b.toString('utf8')).catch(() => '');
+      if (raw) {
+        try { body = JSON.parse(raw); } catch { body = Object.fromEntries(new URLSearchParams(raw)); }
+      }
+      const no = String(body.out_trade_no || body.outTradeNo || body.orderId || body.order_id || body.id || '');
+      const amount = Number(body.amount ?? body.price ?? body.total ?? body.money ?? body.total_fee ?? 0);
+      const room = orders.get(no);
+      if (!room || !room.order) return json(res, 404, { error: '没有这个订单。' });
+      if (!(amount >= room.order.amount - 0.01)) return json(res, 400, { error: '金额不对。' });
+      if (room.order.status === 'awaiting' || room.order.status === 'review' || room.order.status === 'failed') {
+        if (room.status === 'waiting' && !room.filmUrl) beginPaidFilm(room);
+      }
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      return res.end('success');
+    }
+
     /* 站长后台：看订单、确认到账、取消 */
+    if (path === '/api/admin/state' && req.method === 'GET') {
+      if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
+      return json(res, 200, {
+        auto: Boolean(PAY_TOKEN),
+        notifyUrl: '/api/pay/notify?token=' + PAY_TOKEN,
+        price: ORDER_PRICE,
+      });
+    }
     if (path === '/api/admin/orders' && req.method === 'GET') {
       if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
       const list = [...orders.values()]

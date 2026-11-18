@@ -27,6 +27,9 @@
   .err { color: #ff9a9a; font-size: 12px; margin-top: 8px; word-break: break-all; }
   .empty { color: #8f7d88; text-align: center; padding: 30px 0; }
   .note { max-width: 640px; margin: 0 auto; padding: 0 18px; color: #8f7d88; font-size: 11.5px; }
+  .auto { max-width: 640px; margin: 12px auto 0; padding: 11px 14px; border-radius: 12px; border: 1px solid #3a2740; background: #1d1222; font-size: 12.5px; line-height: 1.8; color: #cbb8c3; }
+  .auto b { color: #ffcf8a; }
+  .auto code { color: #8ee0a6; word-break: break-all; font-size: 11.5px; }
 </style>
 </head>
 <body>
@@ -35,6 +38,7 @@
   <p class="sub">确认到账之后，服务器才会调模型生成（480P · 30 秒 · 29.9 元/支）</p>
 </header>
 <p class="note">这页只有拿到口令的人能打开。刷新即最新；每 5 秒自动刷新。</p>
+<div class="auto" id="autoBox">正在读配置…</div>
 <div id="list"><p class="empty">正在读订单…</p></div>
 <script>
 (function () {
@@ -72,6 +76,22 @@
     }).join('');
   }
 
+  async function loadState() {
+    const box = document.getElementById('autoBox');
+    try {
+      const r = await fetch('/api/admin/state?key=' + encodeURIComponent(key));
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) { box.innerHTML = '口令不对：' + esc(b.error || ''); return; }
+      if (b.auto) {
+        box.innerHTML = '<b>自动放行：已开启</b><br>把收款服务（商户号或免签服务）的回调地址填成：<br>'
+          + '<code>' + esc(location.origin + b.notifyUrl) + '</code><br>'
+          + '<span style="color:#8f7d88">回调里带回 out_trade_no 和 amount，服务器核对金额后自动生成，不用你点。</span>';
+      } else {
+        box.innerHTML = '<b>自动放行：未配置</b> —— 现在只能手动确认；接上收款服务的回调后自动生效。';
+      }
+    } catch (e) { box.textContent = '读不到配置'; }
+  }
+
   async function load() {
     try {
       const r = await fetch('/api/admin/orders?key=' + encodeURIComponent(key));
@@ -87,7 +107,9 @@
   });
 
   load();
+  loadState();
   setInterval(load, 5000);
+  setInterval(loadState, 30000);
 })();
 </script>
 </body>
