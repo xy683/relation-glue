@@ -654,6 +654,8 @@
 
   /** 等待的时候，房主先看一支循环的预告；另一个人进来就换成同步的正式播放。 */
   function preview(story) {
+    /* 已经在循环里就别重启，否则每来一次房间事件就闪一下 */
+    if (room.raf) return;
     room.story = story;
     if (story && story.musicUrl) startBgm(story.musicUrl);
     stopFilm();
@@ -662,7 +664,7 @@
     const loop = () => {
       const total = film.durationOf ? film.durationOf(story) : DURATION;
       const t = (performance.now() - started) % total;
-      film.draw(canvas, story, t);
+      film.draw(canvas, quiet, t);
       const note = document.getElementById('agentNote');
       if (note) note.textContent = story && story.agentNote ? story.agentNote : '';
       if (window.GlueMusic && !window.GlueMusic.playing) window.GlueMusic.start(story, t);

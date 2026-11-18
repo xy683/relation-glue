@@ -785,8 +785,8 @@ function drawScene(ctx, w, h, story, i, local, t, photos, cuts, total) {
     /* 颗粒 + 轻微暗角抖动 */
     const g = grain();
     ctx.save();
-    ctx.globalAlpha = 0.06;
-    const off = Math.floor((t / 45) % 220);
+    ctx.globalAlpha = 0.035;
+    const off = Math.floor((t / 260) % 220);
     for (let x = -220; x < w + 220; x += 220) {
       for (let y = -220; y < h + 220; y += 220) {
         ctx.drawImage(g, x + off * 0.4, y + off);
