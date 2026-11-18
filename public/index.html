@@ -110,12 +110,13 @@
       </div>
 
       <div class="field">
-        <label for="theme">配乐 <small>普通模式固定用它</small></label>
-        <select id="theme">
-          <option value="miss">思念（《我好想你》那种）</option>
-          <option value="warm">温柔（梁静茹那种）</option>
-          <option value="regret">遗憾（薛之谦那种）</option>
-        </select>
+        <label>配乐 <small>自己上传；不传就没有背景音乐</small></label>
+        <div class="imports">
+          <label class="chip" for="musicFile">🎵 导入配乐</label>
+          <input id="musicFile" type="file" accept="audio/*,video/*" hidden>
+          <span class="imp" id="musicState"></span>
+        </div>
+        <p class="hint">可以导入本地文件：MP3 等音频；也可以直接导入一段录屏视频，会自动抽出里面的声音。</p>
       </div>
       <button class="btn" type="submit" id="go">生成回忆闪片</button>
       <p class="err hidden" id="err" role="alert"></p>

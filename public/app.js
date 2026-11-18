@@ -188,6 +188,15 @@
   let mode = 'plain';
   const avatars = { me: '', peer: '' };
   const photos = [];
+  let musicUrl = '';
+  let bgm = null;
+  function stopBgm() { if (bgm) { try { bgm.pause(); } catch (e) { /* 忽略 */ } bgm = null; } }
+  function startBgm(url) {
+    stopBgm();
+    if (!url) return;
+    try { bgm = new Audio(url); bgm.loop = true; bgm.volume = 0.9; bgm.play().catch(() => {}); } catch (e) { bgm = null; }
+  }
+
 
   /** 照片缩到 720px 的竖幅，够快剪用。 */
   function readPhoto(file) {
@@ -267,10 +276,27 @@
     $('room').classList.add('hidden');
     bindImports();
     bindModes();
+    $('musicFile')?.addEventListener('change', async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const state = document.getElementById('musicState');
+      if (state) state.textContent = '正在导入…';
+      try {
+        const res = await fetch('/api/music', { method: 'POST', headers: { 'content-type': file.type || 'application/octet-stream', 'x-filename': encodeURIComponent(file.name) }, body: file });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || '导入失败');
+        musicUrl = body.url;
+        if (state) state.textContent = '已导入：' + file.name;
+      } catch (e) {
+        if (state) state.textContent = e instanceof Error ? e.message : '导入失败';
+      }
+    });
+
     $('soundBtn')?.addEventListener('click', () => {
       const story = room.story;
       let ok = false;
       try { ok = window.GlueMusic ? window.GlueMusic.rearm(story, 0) : false; } catch (e) { ok = false; }
+      if (bgm) { try { bgm.play(); ok = true; } catch (e) { /* 忽略 */ } }
       const btn = $('soundBtn');
       if (btn) btn.textContent = ok === false ? '🔇 浏览器拦了声音，点一次视频' : '🔊 声音已开';
       setTimeout(() => { const b = $('soundBtn'); if (b) b.classList.add('on'); }, 1200);
@@ -359,9 +385,9 @@
       error.classList.add('hidden');
       if (log.length < 20) { error.textContent = '记录太短了，再多贴几句吧。'; error.classList.remove('hidden'); return; }
       button.disabled = true;
-      button.textContent = '正在把故事读成十五秒…';
+      button.textContent = '正在为你生成你的专属视频…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8) }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);
@@ -461,6 +487,7 @@
 
   /* ── 短片 ─────────────────────────────────────────── */
   function stopFilm() {
+    stopBgm();
     if (room.raf) cancelAnimationFrame(room.raf);
     room.raf = 0;
     if (window.GlueMusic) window.GlueMusic.stop();
@@ -468,6 +495,7 @@
 
   /** 等待的时候，房主先看一支循环的预告；另一个人进来就换成同步的正式播放。 */
   function preview(story) {
+    if (story && story.musicUrl) startBgm(story.musicUrl);
     stopFilm();
     const canvas = $('film');
     const started = performance.now();
@@ -486,6 +514,7 @@
 
   /** 两边同步：t 由房间给的开始时刻算出来，不是各自点播放的时间。 */
   function play(state) {
+    if (state.story && state.story.musicUrl) startBgm(state.story.musicUrl);
     stopFilm();
     const canvas = $('film');
     const total = film.durationOf ? film.durationOf(state.story) : DURATION;

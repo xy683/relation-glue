@@ -289,6 +289,35 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return json(res, 500, { error: e instanceof Error ? e.message : '渲染失败' });
       }
+    }    /* 使用者自己的配乐：音频直接用，视频用 ffmpeg 抽音轨 */
+    if (path === '/api/music' && req.method === 'POST') {
+      const bytes = await readImage(req, 40 * 1024 * 1024);
+      if (!bytes.length) return json(res, 400, { error: '这个文件是空的。' });
+      let name = 'upload';
+      try { name = decodeURIComponent(String(req.headers['x-filename'] ?? 'upload')).slice(-80); } catch { /* 忽略 */ }
+      const type = String(req.headers['content-type'] || '');
+      const extMatch = /\.(mp3|m4a|aac|wav|ogg|flac|mp4|mov|mkv|webm|avi)$/i.exec(name);
+      const ext = extMatch ? extMatch[1].toLowerCase() : (type.startsWith('video/') ? 'mp4' : 'mp3');
+      const videoExts = ['mp4', 'mov', 'mkv', 'webm', 'avi'];
+      const dir = join(HERE, 'public', 'music');
+      mkdirSync(dir, { recursive: true });
+      const id = randomBytes(8).toString('hex');
+      const rawFile = join(dir, id + '.' + ext);
+      writeFileSync(rawFile, bytes);
+      let outExt = ext;
+      if (videoExts.includes(ext)) {
+        const audioFile = join(dir, id + '.m4a');
+        const ffmpeg = process.platform === 'win32' ? 'C:/Users/Administrator/Doubao/tools/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
+        const res2 = await new Promise((ok) => {
+          const child = spawn(ffmpeg, ['-y', '-i', rawFile, '-vn', '-acodec', 'aac', '-b:a', '160k', audioFile], { stdio: 'ignore' });
+          child.on('exit', (code) => ok(code === 0));
+          child.on('error', () => ok(false));
+        });
+        if (!res2) return json(res, 500, { error: '视频里的音轨没抽出来，换一个文件试试。' });
+        rmSync(rawFile, { force: true });
+        outExt = 'm4a';
+      }
+      return json(res, 200, { url: '/music/' + id + '.' + outExt });
     }    /* 连通性测试：用使用者自己的 Key + 智能体 ID 发一句话 */
     if (path === '/api/agent/test' && req.method === 'POST') {
       const body = await readBody(req);
@@ -319,11 +348,14 @@ const server = createServer(async (req, res) => {
       const media = (log.match(/\[(图片|视频|语音|表情)\]|图片|照片|风景|截图/g) || []).length;
       const seconds = Math.max(15, Math.min(180, Math.round((15 + Math.max(0, lines - 20) * 3 + media * 6) / 3) * 3));
       /* 普通模式固定 15 秒；智能体模式才按信息密度拉长 */
-      story.duration = seconds * 1000;
-      story.mode = mode;
+      /* 普通模式固定 30 秒；智能体模式按信息密度 15 秒到 3 分钟 */
+      story.duration = mode === 'agent' ? seconds * 1000 : 30000;
       story.theme = theme;
       if (mode === 'plain') story.music = { root: 'A', tempo: 68, mood: 'warm', theme };
       else if (story.music) story.music.theme = theme;
+      story.mode = mode;
+      const musicUrl = typeof body.musicUrl === 'string' && /^[/]music[/][A-Za-z0-9._-]+[.][A-Za-z0-9]+$/.test(body.musicUrl) ? body.musicUrl : '';
+      story.musicUrl = musicUrl;
       /* 两张头像（可选）：客户端已经缩到 320px 的 dataURL，这里只收 image/jpeg 且不超过 200KB */
       const avatars = Array.isArray(body.avatars) ? body.avatars.slice(0, 2) : [];
       const images = Array.isArray(body.images) ? body.images.slice(0, 8) : [];
