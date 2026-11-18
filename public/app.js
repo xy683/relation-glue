@@ -210,13 +210,35 @@
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        resolve(cartoonify(canvas).toDataURL('image/jpeg', 0.8));
       };
       img.onerror = () => resolve('');
       img.src = url;
     });
   }
 
+  /** Q 版滤镜：提饱和、压色阶（posterize），让真人照片变成偏卡通的大色块。 */
+  function cartoonify(canvas) {
+    try {
+      const ctx = canvas.getContext('2d');
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = img.data;
+      const step = 40;
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        const sat = 1.35;
+        const nr = gray + (r - gray) * sat;
+        const ng = gray + (g - gray) * sat;
+        const nb = gray + (b - gray) * sat;
+        d[i] = Math.min(255, Math.round(Math.round(nr / step) * step));
+        d[i + 1] = Math.min(255, Math.round(Math.round(ng / step) * step));
+        d[i + 2] = Math.min(255, Math.round(Math.round(nb / step) * step));
+      }
+      ctx.putImageData(img, 0, 0);
+      return canvas;
+    } catch (e) { return canvas; }
+  }
   /** 头像缩到 320px 的方形，省流量也够画。 */
   function readAvatar(file) {
     return new Promise((resolve) => {
@@ -230,7 +252,7 @@
         const k = Math.max(s / img.width, s / img.height);
         g.drawImage(img, (s - img.width * k) / 2, (s - img.height * k) / 2, img.width * k, img.height * k);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
+        resolve(cartoonify(canvas).toDataURL('image/jpeg', 0.82));
       };
       img.onerror = () => resolve('');
       img.src = url;

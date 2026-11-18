@@ -342,9 +342,10 @@ function drawPhoto(ctx, src, w, h, k) {
   ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
   ctx.restore();
   const veil = ctx.createLinearGradient(0, 0, 0, h);
-  veil.addColorStop(0, 'rgba(10,6,12,0.55)');
-  veil.addColorStop(0.5, 'rgba(10,6,12,0.35)');
-  veil.addColorStop(1, 'rgba(10,6,12,0.75)');
+  veil.addColorStop(0, 'rgba(8,5,10,0.42)');
+  veil.addColorStop(0.42, 'rgba(8,5,10,0.10)');
+  veil.addColorStop(0.62, 'rgba(8,5,10,0.14)');
+  veil.addColorStop(1, 'rgba(8,5,10,0.5)');
   ctx.fillStyle = veil;
   ctx.fillRect(0, 0, w, h);
   return true;
