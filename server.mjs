@@ -112,10 +112,24 @@ function buildScript(log, me, partner, segCount = 3) {
 /** 用户自己写的小故事 → 3 段脚本（不再解析聊天记录）。 */
 function buildScriptFromStory(text, me, partner) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim();
-  const parts = clean.split(/(?<=[。！？!?；;\n])/).map((s) => s.trim()).filter(Boolean);
-  const segCount = Math.min(3, Math.max(1, parts.length));
-  /* 按句子平均分到最多 3 段 */
-  const shots = ['缓慢推近', '轻轻横移', '慢慢拉远'];
+  let parts = clean.split(/(?<=[。！？!?；;\n])/).map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 6) {
+    const more = [];
+    parts.forEach((p) => {
+      const bits = p.split(/(?<=[，,、])/).map((s) => s.trim()).filter(Boolean);
+      if (bits.length > 1) more.push(...bits); else more.push(p);
+    });
+    parts = more;
+  }
+  while (parts.length < 3) {
+    let idx = 0;
+    parts.forEach((p, i) => { if (p.length > parts[idx].length) idx = i; });
+    const p = parts[idx];
+    const half = Math.ceil(p.length / 2);
+    parts.splice(idx, 1, p.slice(0, half), p.slice(half));
+  }
+  const segCount = parts.length >= 6 ? 6 : 3;
+  const shots = ['缓慢推近', '轻轻横移', '慢慢拉远', '贴近细节', '缓缓升起', '停住不动'];
   const conflict = /(分开|分手|吵架|冷战|离开|走散|误会|闹掰|不理|失望)/;
   const sweet = /(遇见|第一次|一起|温柔|开心|喜欢|爱|照顾|等我|陪伴|旅行|海|风)/;
   const segments = [];
@@ -245,7 +259,7 @@ async function runFilmJob(id, opts) {
       const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
-        body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: 10, resolution: '480p' }),
+        body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: segs.length >= 6 ? 5 : 10, resolution: '480p' }),
       });
       const raw = await created.text();
       if (!created.ok) {
@@ -290,6 +304,19 @@ async function runFilmJob(id, opts) {
     job.phase = 'done';
     job.status = 'done';
     job.url = '/outputs/' + id + '.mp4';
+    if (opts.roomId) {
+      const room = rooms.get(opts.roomId);
+      if (room && room.status !== 'chat' && room.status !== 'ended') {
+        room.filmUrl = job.url;
+        clearTimers(room);
+        room.status = 'film';
+        room.filmStart = Date.now();
+        room.timers.push(setTimeout(() => {
+          if (room.status === 'film') { room.status = 'confirm'; tell(room); }
+        }, 30_500));
+        tell(room);
+      }
+    }
   } catch (e) {
     job.status = 'error';
     job.error = e instanceof Error ? e.message : String(e);
@@ -347,6 +374,7 @@ function publicState(room, now = Date.now()) {
     chatEnd: room.chatEnd,
     serverNow: now,
     story: Object.assign({}, room.story, { beats: [] }),
+    filmUrl: room.filmUrl || '',
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
   };
 }
@@ -654,7 +682,7 @@ const server = createServer(async (req, res) => {
       const id = randomBytes(6).toString('hex');
       const host = String(req.headers.host || 'localhost');
       filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 6, url: '', error: '', at: Date.now() });
-      void runFilmJob(id, { key, script: body.script || {}, storyText: String(body.storyText ?? ''), musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host });
+      void runFilmJob(id, { key, script: body.script || {}, storyText: String(body.storyText ?? ''), musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host, roomId: String(body.roomId ?? '') });
       return json(res, 200, { id });
     }
     if (path.startsWith('/api/film-jobs/') && req.method === 'GET') {

@@ -533,6 +533,8 @@
   /* ── 状态 ─────────────────────────────────────────── */
   function apply(state) {
     if (!state) return;
+    /* 房间里已经有成片地址：两个人看同一支视频 */
+    if (state.filmUrl) filmDone(state.filmUrl);
     const wasChat = room.state?.status === 'chat';
     room.state = state;
     room.offset = state.serverNow - Date.now();
@@ -624,7 +626,7 @@
       }
       const total = (story.script && story.script.segments ? story.script.segments.length : 3);
       say('正在生成第 1/' + total + ' 段视频…');
-      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script: story.script, storyText: story.storyText, musicUrl: story.musicUrl, images: story.images, avatars: story.avatars }) });
+      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script: story.script, storyText: story.storyText, musicUrl: story.musicUrl, images: story.images, avatars: story.avatars, roomId: room.id }) });
       const jb = await jr.json().catch(() => ({}));
       if (!jr.ok) throw new Error(jb.error || '任务没建成');
       const jobId = jb.id;
