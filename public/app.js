@@ -335,20 +335,13 @@
   let agentReady = false;
 
   /** 智能体模式：没填 Key 时把输入框露出来，填了就去掉。 */
-  async function refreshAgent() {
+  /* 页面加载、上传、预览阶段一律不请求任何模型；这里只把 Key 区域藏起来 */
+  function refreshAgent() {
     try {
-      agentReady = Boolean(localStorage.getItem('glue.agentKey'));
-      const res = await fetch('/api/agent');
-      const body = await res.json().catch(() => ({}));
       const field = $('agentKeyField');
-      /* 全站用站长的 Key：Key 输入框和模型选择永远不出现 */
       if (field) field.classList.add('hidden');
-      if (state) state.textContent = agentReady
-        ? ('已用你自己的 Key（' + (body.model || 'doubao') + '），花的是你自己的 token')
-        : '还没填 Key：填了就走豆包，不填就走本地分镜。Key 只存在你的浏览器里。';
-    } catch { /* 网络不好先不管 */ }
-  }
-  function bindModes() {
+    } catch (e) { /* 忽略 */ }
+  }  function bindModes() {
     document.querySelectorAll('.mode').forEach((el) => el.addEventListener('click', () => {
       mode = el.dataset.mode === 'agent' ? 'agent' : 'plain';
       document.querySelectorAll('.mode').forEach((n) => n.classList.toggle('on', n === el));
@@ -503,22 +496,7 @@
       const dense = log.split(String.fromCharCode(10)).filter((l) => l.trim()).length > 50;
       button.textContent = dense ? '信息密度较大，正在生成，请稍等…' : '正在为你生成你的专属视频…';
       try {
-        /* 只有勾了「照片变 Q 版」才调 Seedream，花的是使用者自己的额度 */
-        /* 普通模式一律不调豆包；智能体模式自动把照片变 Q 版（用填 Key 那个人的额度） */
-        const wantQ = Boolean(avatars.me || avatars.peer || photos.length);
-        if (wantQ && (avatars.me || avatars.peer || photos.length)) {
-          button.textContent = '正在把照片变成 Q 版…';
-          if (avatars.me) { const u = await toChibi(avatars.me); if (u) avatars.me = u; }
-          if (avatars.peer) { const u = await toChibi(avatars.peer); if (u) avatars.peer = u; }
-          if (photos.length) {
-            const idxs = photos.map((_, i) => i).slice(0, 4);
-            const urls = await Promise.all(idxs.map((i) => toChibi(photos[i], 'scene')));
-            urls.forEach((url, k) => { if (url) photos[idxs[k]] = url; });
-          }
-          const dense = log.split(String.fromCharCode(10)).filter((l) => l.trim()).length > 50;
-      button.textContent = dense ? '信息密度较大，正在生成，请稍等…' : '正在为你生成你的专属视频…';
-        }
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: '', agentId: '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);
@@ -543,41 +521,7 @@
     $('linkText').textContent = link;
     $('copyLink').addEventListener('click', () => copy(link).then(() => toast('链接已复制')));
     $('copyMain').addEventListener('click', () => copy(link).then(() => toast('专属链接已复制，发给 TA 吧')));
-    const filmAiBtn = $('filmAiBtn');
-    if (filmAiBtn) filmAiBtn.onclick = async () => {
-      const key = localStorage.getItem('glue.agentKey') || '';
-      if (!key) { toast('先填你自己的豆包 Key'); return; }
-      if (!room.story) { toast('先生成一支闪片。'); return; }
-      if (!window.confirm('AI 动画按秒计费（约 1 分钟需要十几分钟生成），确认用你自己的额度？')) return;
-      filmAiBtn.disabled = true;
-      const old = filmAiBtn.textContent;
-      filmAiBtn.textContent = '正在生成 AI 动画…（约 10 分钟）';
-      try {
-        const res = await fetch('/api/film', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, story }) });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || '生成失败');
-        toast('AI 动画好了');
-        window.open(body.url, '_blank');
-      } catch (e) { toast(e instanceof Error ? e.message : '生成失败'); }
-      filmAiBtn.disabled = false;
-      filmAiBtn.textContent = old;
-    };
-    const filmBtn = $('filmBtn');
-    if (filmBtn) filmBtn.onclick = async () => {
-      if (!room.story) { toast('先生成一支闪片再导出。'); return; }
-      filmBtn.disabled = true;
-      const old = filmBtn.textContent;
-      filmBtn.textContent = '正在渲染成片…（20–60 秒）';
-      try {
-        const res = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story }) });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || '渲染失败');
-        toast('成片好了，正在打开');
-        window.open(body.url, '_blank');
-      } catch (e) { toast(e instanceof Error ? e.message : '渲染失败'); }
-      filmBtn.disabled = false;
-      filmBtn.textContent = old;
-    };
+
 
     try {
       const res = await fetch(`/api/rooms/${id}/join`, {
@@ -677,53 +621,57 @@
     if (canvas) canvas.classList.add('hidden');
     stopFilm();
   }
-  async function autoFilm(storyArg) {
-    const story = storyArg || room.story;
-    if (filmStarted || !story) return;
-    filmStarted = true;
+  async function confirmFilm() {
+    const story = room.story;
+    if (!story) { toast('先生成一支闪片。'); return; }
+    const btn = $('makeFilm');
     const st = $('filmState');
     const say = (text) => { if (st) st.textContent = text; };
-
-    async function renderLocal() {
-      say('正在渲染成片（约 30 秒）…');
-      try {
-        const res = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story }) });
-        const b = await res.json().catch(() => ({}));
-        if (res.ok && b.url) filmDone(b.url);
-        else say('成片没出来：' + String(b.error || '再试一次'));
-      } catch (e) { say('成片没出来：' + (e instanceof Error ? e.message : '网络错误')); }
-    }
-
-    if ((story.mode || 'plain') !== 'agent') { await renderLocal(); return; }
-
-    say('正在根据聊天记录生成回忆脚本…');
-    const script = story.script || null;
-
-    let jobId = '';
+    if (btn) { btn.disabled = true; btn.textContent = '正在生成…'; }
     try {
-      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script, musicUrl: story.musicUrl, images: story.images, avatars: story.avatars }) });
+      say('正在把照片变成 Q 版…');
+      const conv = async (src, kind) => (typeof src === 'string' && src.startsWith('/qstyle/')) ? src : await toChibi(src, kind);
+      const av = Array.isArray(story.avatars) ? story.avatars.slice(0, 2) : [];
+      const imgs = Array.isArray(story.images) ? story.images.slice(0, 4) : [];
+      if (av.length || imgs.length) {
+        const qa = (await Promise.all(av.map((s) => conv(s, 'portrait')))).filter(Boolean);
+        const qi = (await Promise.all(imgs.map((s) => conv(s, 'scene')))).filter(Boolean);
+        if (qa.length) story.avatars = qa;
+        if (qi.length) story.images = qi;
+      }
+      const total = (story.script && story.script.segments ? story.script.segments.length : 3);
+      say('正在生成第 1/' + total + ' 段视频…');
+      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script: story.script, musicUrl: story.musicUrl, images: story.images, avatars: story.avatars }) });
       const jb = await jr.json().catch(() => ({}));
       if (!jr.ok) throw new Error(jb.error || '任务没建成');
-      jobId = jb.id;
+      const jobId = jb.id;
+      for (let k = 0; k < 900; k += 1) {
+        await new Promise((ok) => setTimeout(ok, 2000));
+        let s = null;
+        try { s = await (await fetch('/api/film-jobs/' + jobId)).json(); } catch (e) { continue; }
+        if (!s) continue;
+        if (s.phase === 'segments') say('正在生成第 ' + s.step + '/' + s.total + ' 段视频…');
+        else if (s.phase === 'concat') say('正在拼接完整回忆短片…');
+        if (s.status === 'done') { filmDone(s.url); return; }
+        if (s.status === 'error') throw new Error(s.error);
+      }
+      throw new Error('生成超时了，稍后再试。');
     } catch (e) {
-      say('AI 动画没出来（' + (e instanceof Error ? e.message : '未知') + '），改用本地渲染…');
-      await renderLocal();
-      return;
-    }
-    for (let k = 0; k < 900; k += 1) {
-      await new Promise((ok) => setTimeout(ok, 2000));
-      let s = null;
-      try { s = await (await fetch('/api/film-jobs/' + jobId)).json(); } catch (e) { continue; }
-      if (!s) continue;
-      if (s.phase === 'segments') say('正在生成第 ' + s.step + '/' + s.total + ' 段视频…');
-      else if (s.phase === 'concat') say('正在拼接完整回忆短片…');
-      if (s.status === 'done') { filmDone(s.url); return; }
-      if (s.status === 'error') { say('AI 动画没出来：' + s.error); return; }
+      say('生成失败：' + (e instanceof Error ? e.message : '未知'));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '确认生成视频'; }
     }
   }
+
+  /* 只有点这个按钮才会调模型 */
+  document.addEventListener('click', (event) => {
+    const el = event.target;
+    if (el && el.id === 'makeFilm') { event.preventDefault(); void confirmFilm(); }
+  });
+
   /** 等待的时候，房主先看一支循环的预告；另一个人进来就换成同步的正式播放。 */
   function preview(story) {
-    void autoFilm(story);
+    room.story = story;
     if (story && story.musicUrl) startBgm(story.musicUrl);
     stopFilm();
     const canvas = $('film');
