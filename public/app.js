@@ -503,6 +503,7 @@
       button.disabled = true;
       const dense = log.split(String.fromCharCode(10)).filter((l) => l.trim()).length > 50;
       button.textContent = dense ? '信息密度较大，正在生成，请稍等…' : '正在为你生成你的专属视频…';
+      try {
         /* 只有勾了「照片变 Q 版」才调 Seedream，花的是使用者自己的额度 */
         /* 普通模式一律不调豆包；智能体模式自动把照片变 Q 版（用填 Key 那个人的额度） */
         const wantQ = mode === 'agent' && Boolean(avatars.me || avatars.peer || photos.length);
@@ -518,7 +519,6 @@
           const dense = log.split(String.fromCharCode(10)).filter((l) => l.trim()).length > 50;
       button.textContent = dense ? '信息密度较大，正在生成，请稍等…' : '正在为你生成你的专属视频…';
         }
-      try {
         const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');

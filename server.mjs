@@ -686,16 +686,19 @@ const server = createServer(async (req, res) => {
         /* 请豆包当导演：它给分镜、颜色、音乐的性格；画面与声音还是本地的 */
         const userKey = String(body.agentKey ?? '').trim();
         const agentId = String(body.agentId ?? '').trim();
-        const result = await designFilm(userKey, log, { me: story.me, partner: story.partner }, agentId, String(body.agentModel ?? ''));
-        const spec = result.spec;
-        const designed = spec ?? localDesign(story.seed, story.stats);
-        story.fromAgent = Boolean(spec);
-        story.agentNote = spec ? (agentId ? '豆包智能体定制' : '豆包定制') : (result.error ? ('豆包：' + result.error) : '没填 Key，先按本地的来');
-        designed.acts.forEach((a, i) => {
-          if (story.acts[i]) { story.acts[i].title = a.title; story.acts[i].note = a.note; }
-        });
-        story.palette = designed.palette;
-        story.music = designed.music;
+        if (!userKey) {
+          story.fromAgent = false;
+          story.agentNote = '没填 Key，先按本地的来';
+        } else {
+          const result = await designFilm(userKey, log, { me: story.me, partner: story.partner }, agentId, String(body.agentModel ?? ''));
+          const spec = result.spec;
+          const designed = spec ?? localDesign(story.seed, story.stats);
+          story.fromAgent = Boolean(spec);
+          story.agentNote = spec ? (agentId ? '豆包智能体定制' : '豆包定制') : (result.error ? ('豆包：' + result.error) : '没填 Key，先按本地的来');
+          designed.acts.forEach((a, idx) => { if (story.acts[idx]) { story.acts[idx].title = a.title; story.acts[idx].note = a.note; } });
+          story.palette = designed.palette;
+          story.music = designed.music;
+        }
       }
       const id = randomBytes(9).toString('base64url');
       /** @type {Room} */
