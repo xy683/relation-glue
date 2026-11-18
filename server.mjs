@@ -162,13 +162,13 @@ const OWNER_KEY = (() => {
 
 /* 参考样片里提炼出来的风格（只复刻风格，不复刻剧情/人物） */
 const STYLE = [
-  '日系 2D 动画赛璐璐风格，细线条、柔和高光、干净的色块。',
-  '背景做浅景深虚化：斑驳阳光、树影光斑、暖色 bokeh，像真实风景被动画化。',
-  '暖色调（米金、暖橙、浅绿），明亮通透，胶片感轻微颗粒。',
-  '镜头缓慢轻推或轻微横移，稳定不抖，电影感构图。',
-  '氛围：日常、温柔、治愈、青春恋爱。',
+  '日系 2D 动画赛璐璐风格，两个动画角色（一男一女）始终在画面里，中景，能看清脸、眼睛和动作。',
+  '人物是正常比例的动漫角色（不是火柴人、不是圆球），黑色头发、干净线条、柔和高光、轻微腮红。',
+  '两个人要互动：并肩走、对视、递东西、吃东西、坐着聊天等，不要空镜、不要只有风景。',
+  '背景是真实风景的动画化：公园、街道、海边，斑驳阳光、树影光斑、浅景深虚化。',
+  '暖色调（米金、暖橙、浅绿），明亮通透，轻微胶片颗粒。',
+  '镜头缓慢推近或轻微横移，稳定不抖，电影感构图。',
 ].join('');
-
 const NEGATIVE = '避免出现：人脸扭曲、肢体畸形、画面闪烁、抖动、崩坏、模糊、变形、Q版形象失效、物体穿模、五官错乱、多手多脚、文字乱码。';
 /* 防刷：同一个 IP 每天最多 5 次，且两次之间至少隔 30 分钟 */
 const filmQuota = new Map();
@@ -176,6 +176,32 @@ const rooms = new Map();
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon' };
 
+/* 没传头像时：生成一张固定的「默认男女主」Q 版参考图，之后所有片子都用它锁形象 */
+async function ensureDefaultCouple(key) {
+  const dir = join(HERE, 'public', 'qstyle');
+  mkdirSync(dir, { recursive: true });
+  const rel = '/qstyle/default-couple.png';
+  const file = join(dir, 'default-couple.png');
+  if (existsSync(file)) return rel;
+  const r = await fetch('https://ark.cn-beijing.volces.com/api/v3/images/generations', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+    body: JSON.stringify({
+      model: 'doubao-seedream-5-5-261028',
+      prompt: 'Two cute anime characters standing together, a boy with black hair in a blue shirt and a girl with long black hair in a white dress, cel-shaded 2D anime style, clean lineart, warm sunlight, plain soft background, full body, no text',
+      size: '1024x1024',
+      response_format: 'url',
+    }),
+  });
+  if (!r.ok) return '';
+  const j = await r.json().catch(() => ({}));
+  const url = j?.data?.[0]?.url;
+  if (!url) return '';
+  const bin = await fetch(url);
+  if (!bin.ok) return '';
+  writeFileSync(file, Buffer.from(await bin.arrayBuffer()));
+  return rel;
+}
 async function runFilmJob(id, opts) {
   const job = filmJobs.get(id);
   const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
@@ -194,6 +220,12 @@ async function runFilmJob(id, opts) {
       .slice(0, 1)
       .map(toUrl);
     const outs = [];
+    if (!charRefs.length) {
+      try {
+        const d = await ensureDefaultCouple(opts.key);
+        if (d) charRefs.push('http://' + opts.host + d);
+      } catch { /* 没有默认图就只靠文字描述 */ }
+    }
     const genOne = async (i) => {
       job.phase = 'segments';
       const seg = segs[i];
@@ -201,7 +233,8 @@ async function runFilmJob(id, opts) {
       const prompt = [
         STYLE,
         '这一镜：' + (seg.scene || '') + '；镜头' + (seg.shot || '缓慢推近') + '；情绪' + (seg.emotion || '温柔') + '。',
-        '画面里是两位 Q 版动画人物（以人物参考图为准，不要变成真人）。',
+        '必须出现两个人（一男一女，形象以人物参考图为准），在画面里做动作、有眼神交流；不要空镜、不要只拍风景、不要火柴人或圆球。',
+        seg.excerpt ? '这一镜讲的是：' + seg.excerpt.slice(0, 60) : '',
         (seg.refs && seg.refs.length > 1) ? '背景使用风景参考图，做成同风格动画背景。' : '',
         seg.subtitle ? '字幕只出现这一句：' + seg.subtitle : '',
         NEGATIVE,
