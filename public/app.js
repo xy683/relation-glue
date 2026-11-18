@@ -677,6 +677,7 @@
     const canvas = $('film');
     if (video) {
       video.src = url;
+      if (video.getAttribute('src') === url) return;
       video.classList.remove('hidden');
       video.play().catch(() => {});
     }
