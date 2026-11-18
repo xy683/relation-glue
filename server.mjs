@@ -62,7 +62,7 @@ function sceneOf(hour) {
 }
 
 /** 从聊天记录里整理出一条 6 段 × 10 秒的回忆脚本。 */
-function buildScript(log, me, partner) {
+function buildScript(log, me, partner, segCount = 3) {
   const lines = parseChatLines(log);
   const who1 = me || '我';
   const who2 = partner || 'TA';
@@ -73,10 +73,10 @@ function buildScript(log, me, partner) {
   const dates = lines.map((l) => l.date).filter(Boolean);
   const firstDate = dates[0] || '';
   const lastDate = dates[dates.length - 1] || '';
-  const per = Math.max(1, Math.ceil(lines.length / 6));
+  const per = Math.max(1, Math.ceil(lines.length / segCount));
   const shots = ['缓慢推近', '轻轻横移', '停住不动', '慢慢拉远', '贴近细节', '缓缓升起'];
   const segments = [];
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < segCount; i += 1) {
     const chunk = lines.slice(i * per, (i + 1) * per);
     if (!chunk.length) break;
     const chunkText = chunk.map((l) => l.text).join(' ');
@@ -673,7 +673,7 @@ const server = createServer(async (req, res) => {
       const seconds = Math.max(15, Math.min(180, Math.round((15 + Math.max(0, lines - 20) * 3 + media * 6) / 3) * 3));
       /* 普通模式固定 15 秒；智能体模式才按信息密度拉长 */
       /* 普通模式固定 30 秒；智能体模式按信息密度 15 秒到 3 分钟 */
-      story.duration = mode === 'agent' ? 60000 : 30000;
+      story.duration = 30000;
       story.theme = theme;
       if (mode === 'plain') story.music = { root: 'A', tempo: 68, mood: 'warm', theme };
       else if (story.music) story.music.theme = theme;
@@ -725,7 +725,7 @@ const server = createServer(async (req, res) => {
         }
       }
       /* 把脚本直接挂在 story 上，客户端不用再回传聊天记录 */
-      story.script = buildScript(log, story.me, story.partner);
+      story.script = buildScript(log, story.me, story.partner, 3);
       const id = randomBytes(9).toString('base64url');
       /** @type {Room} */
       const room = {
