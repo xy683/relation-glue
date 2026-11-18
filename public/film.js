@@ -441,6 +441,165 @@ function subtitle(ctx, w, h, text, alpha) {
   ctx.fillText(text.slice(0, 34), w / 2, h * 0.862);
   ctx.restore();
 }
+
+/** 参考「VIBE 大赏」那种横屏动画：星空、月亮、一道弧、两个人、巨大的字。 */
+function drawScene(ctx, w, h, story, i, local, t, photos, cuts, total) {
+  const top = h * 0.12;
+  const sw = w;
+  const sh = Math.round(w * 9 / 16);
+  ctx.save();
+  ctx.translate(0, top);
+
+  /* 星空 */
+  const sky = ctx.createLinearGradient(0, 0, 0, sh);
+  sky.addColorStop(0, '#1a1030');
+  sky.addColorStop(0.55, '#2a1230');
+  sky.addColorStop(1, '#0d0714');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, sw, sh);
+  const r = rng(23);
+  for (let n = 0; n < 90; n += 1) {
+    const x = r() * sw;
+    const y = r() * sh * 0.8;
+    const a = 0.25 + r() * 0.6;
+    ctx.fillStyle = 'rgba(255,240,230,' + a.toFixed(2) + ')';
+    ctx.beginPath();
+    ctx.arc(x, y, 1 + r() * 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  /* 月亮 */
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  const mx = sw * 0.16;
+  const my = sh * 0.22;
+  const halo = ctx.createRadialGradient(mx, my, 0, mx, my, 120);
+  halo.addColorStop(0, 'rgba(255,245,220,0.5)');
+  halo.addColorStop(1, 'rgba(255,245,220,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(mx, my, 120, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffe9b8';
+  ctx.beginPath();
+  ctx.arc(mx, my, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1a1030';
+  ctx.beginPath();
+  ctx.arc(mx + 14, my - 10, 30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  /* 地平线 */
+  const groundY = sh * 0.78;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY + 40);
+  ctx.quadraticCurveTo(sw / 2, groundY - 90, sw, groundY + 40);
+  ctx.lineTo(sw, sh);
+  ctx.lineTo(0, sh);
+  ctx.closePath();
+  const g2 = ctx.createLinearGradient(0, groundY - 60, 0, sh);
+  g2.addColorStop(0, '#241a3a');
+  g2.addColorStop(1, '#0c0714');
+  ctx.fillStyle = g2;
+  ctx.fill();
+
+  /* 弧线连接两个人 */
+  const leftX = sw * 0.24;
+  const rightX = sw * 0.76;
+  const peopleY = groundY - 30;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,120,190,0.8)';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = 'rgba(255,120,190,0.8)';
+  ctx.shadowBlur = 18;
+  ctx.beginPath();
+  ctx.moveTo(leftX, peopleY - 60);
+  ctx.quadraticCurveTo(sw / 2, peopleY - 240, rightX, peopleY - 60);
+  ctx.stroke();
+  ctx.restore();
+
+  /* 两个人：Q 版照片做成发光的圆 */
+  const drawFace = (src, x, y, size, tint) => {
+    const img = photoCache.get(src);
+    ctx.save();
+    ctx.shadowColor = tint;
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = tint;
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2 + 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    if (img && img.ready) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+      ctx.clip();
+      const s = Math.max(size / img.width, size / img.height);
+      ctx.drawImage(img, x - (img.width * s) / 2, y - (img.height * s) / 2, img.width * s, img.height * s);
+      ctx.restore();
+    }
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  };
+  if (photos[0]) drawFace(photos[0], leftX, peopleY - 70, 130, 'rgba(255,140,190,0.8)');
+  if (photos[1] || photos[0]) drawFace(photos[1] || photos[0], rightX, peopleY - 70, 130, 'rgba(140,220,255,0.8)');
+
+  /* 大字：这一镜的标题 + 统计 */
+  const act = (story.acts && story.acts[i]) || {};
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 24;
+  ctx.fillStyle = 'rgba(255,255,255,0.96)';
+  ctx.font = '700 96px "Songti SC","STSong","Microsoft YaHei",serif';
+  ctx.fillText((act.title || ['初见', '靠近', '分享', '沉默', '回望'][i]).slice(0, 6), sw / 2, sh * 0.54);
+  ctx.font = '400 34px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillStyle = 'rgba(255,214,190,0.8)';
+  if (act.note) ctx.fillText(String(act.note).slice(0, 22), sw / 2, sh * 0.54 + 58);
+
+  /* 统计数字：消息条数 + 跨度，像参考片里的「9,860 km」 */
+  const stats = story.stats || {};
+  const big = String(stats.messages || 0);
+  ctx.font = '800 120px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillText(big, sw / 2 - 40, sh * 0.2);
+  ctx.font = '600 42px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillStyle = 'rgba(255,214,120,0.95)';
+  ctx.fillText('条消息', sw / 2 + 90, sh * 0.2);
+
+  /* 底部字幕 */
+  const said = act.bubbles && act.bubbles[0] && act.bubbles[0].text;
+  if (said) {
+    ctx.font = '500 40px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    const tw = Math.min(sw * 0.8, ctx.measureText(said).width + 60);
+    roundRect(ctx, (sw - tw) / 2, sh - 120, tw, 60, 30);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,248,242,0.95)';
+    ctx.fillText(String(said).slice(0, 30), sw / 2, sh - 78);
+  }
+
+  ctx.restore();
+
+  /* 上下黑边 */
+  ctx.fillStyle = '#07050a';
+  ctx.fillRect(0, 0, w, top);
+  ctx.fillRect(0, top + sh, w, h - top - sh);
+
+  /* 鼓点白闪 */
+  if (cuts && cuts.length) {
+    let j = 0;
+    while (j + 1 < cuts.length && cuts[j + 1] <= t) j += 1;
+    const since = t - cuts[j];
+    if (since < 130) {
+      ctx.fillStyle = 'rgba(255,246,238,' + ((1 - since / 130) * 0.45).toFixed(3) + ')';
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+}
+
   function draw(canvas, story, t) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = W;
@@ -452,6 +611,18 @@ function subtitle(ctx, w, h, text, alpha) {
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+
+    /* 有照片：走横屏动画（星空/弧线/两个人/大字），像参考片那样 */
+    const scenePhotos = story && Array.isArray(story.images) ? story.images : [];
+    if (scenePhotos.length) {
+      const totalD = durationOf(story);
+      const lenD = totalD / 5;
+      const idxD = Math.min(4, Math.floor(t / lenD));
+      const localD = clamp((t - idxD * lenD) / lenD, 0, 1);
+      const cutsD = story.beats && story.beats.length > 1 ? story.beats.filter((b) => b > 0 && b < totalD) : [];
+      drawScene(ctx, w, h, story, idxD, localD, t, scenePhotos, cutsD, totalD);
+      return;
+    }
 
     const total = durationOf(story);
     const actLen = total / 5;

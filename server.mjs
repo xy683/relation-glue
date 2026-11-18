@@ -395,7 +395,7 @@ const server = createServer(async (req, res) => {
       const seconds = Math.max(15, Math.min(180, Math.round((15 + Math.max(0, lines - 20) * 3 + media * 6) / 3) * 3));
       /* 普通模式固定 15 秒；智能体模式才按信息密度拉长 */
       /* 普通模式固定 30 秒；智能体模式按信息密度 15 秒到 3 分钟 */
-      story.duration = mode === 'agent' ? seconds * 1000 : 30000;
+      story.duration = mode === 'agent' ? 60000 : 30000;
       story.theme = theme;
       if (mode === 'plain') story.music = { root: 'A', tempo: 68, mood: 'warm', theme };
       else if (story.music) story.music.theme = theme;
