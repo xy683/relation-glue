@@ -268,8 +268,12 @@
     bindImports();
     bindModes();
     $('soundBtn')?.addEventListener('click', () => {
-      try { window.GlueMusic && window.GlueMusic.rearm(room.story, 0); } catch (e) { /* 忽略 */ }
-      $('soundBtn')?.classList.add('on');
+      const story = room.story;
+      let ok = false;
+      try { ok = window.GlueMusic ? window.GlueMusic.rearm(story, 0) : false; } catch (e) { ok = false; }
+      const btn = $('soundBtn');
+      if (btn) btn.textContent = ok === false ? '🔇 浏览器拦了声音，点一次视频' : '🔊 声音已开';
+      setTimeout(() => { const b = $('soundBtn'); if (b) b.classList.add('on'); }, 1200);
     });
     $('photos')?.addEventListener('change', async (event) => {
       const files = [...(event.target.files || [])].slice(0, 8);

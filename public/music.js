@@ -277,9 +277,25 @@
 
   /** 解锁后被调用：如果之前在播但因为没解锁没声，这里补一次。 */
   function rearm(story, fromMs) {
-    unlock();
-    if (!story) return;
+    const ok = unlock();
+    if (!story) return ok;
     try { start(story, fromMs || 0); } catch { /* 忽略 */ }
+    try { beep(); } catch { /* 忽略 */ }
+    return ok !== false && !!ctx && ctx.state === 'running';
+  }
+
+  /** 一声很短的提示音，用来确认“真的出声了”。 */
+  function beep() {
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.value = 660;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 0.4);
   }
 
   window.GlueMusic = { start, stop, unlock, rearm, get playing() { return state.playing; } };

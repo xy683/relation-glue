@@ -79,14 +79,16 @@
           <button type="button" class="app" data-app="kuaishou">快手</button>
         </div>
         <div class="guide hidden" id="appGuide"></div>
-      <div class="field">
-        <label for="theme">配乐 <small>普通模式固定用它；智能体模式按它定情绪</small></label>
-        <select id="theme">
-          <option value="miss">思念（《我好想你》那种）</option>
-          <option value="warm">温柔（梁静茹那种）</option>
-          <option value="regret">遗憾（薛之谦那种）</option>
-        </select>
       </div>
+
+      <div class="field">
+        <label>两个人的头像 <small>可选；传了就用他们的脸来演</small></label>
+        <div class="avatars">
+          <label class="ava" id="avaMeBox"><input id="avaMe" type="file" accept="image/*" hidden><span>我的头像</span><img id="avaMeImg" alt=""></label>
+          <label class="ava" id="avaPeerBox"><input id="avaPeer" type="file" accept="image/*" hidden><span>TA 的头像</span><img id="avaPeerImg" alt=""></label>
+        </div>
+      </div>
+
       <div class="field">
         <label>照片 <small>可选；传几张，短片就用它们做快剪</small></label>
         <div class="imports">
@@ -95,14 +97,7 @@
           <span class="imp" id="photoState"></span>
         </div>
       </div>
-      </div>
-      <div class="field">
-        <label>两个人的头像 <small>可选；传了就用他们的脸来演，不传就是剪影</small></label>
-        <div class="avatars">
-          <label class="ava" id="avaMeBox"><input id="avaMe" type="file" accept="image/*" hidden><span>我的头像</span><img id="avaMeImg" alt=""></label>
-          <label class="ava" id="avaPeerBox"><input id="avaPeer" type="file" accept="image/*" hidden><span>TA 的头像</span><img id="avaPeerImg" alt=""></label>
-        </div>
-      </div>
+
       <div class="row">
         <div class="field">
           <label for="me">我的昵称</label>
@@ -112,6 +107,15 @@
           <label for="partner">对方备注</label>
           <input id="partner" type="text" maxlength="24" placeholder="TA">
         </div>
+      </div>
+
+      <div class="field">
+        <label for="theme">配乐 <small>普通模式固定用它</small></label>
+        <select id="theme">
+          <option value="miss">思念（《我好想你》那种）</option>
+          <option value="warm">温柔（梁静茹那种）</option>
+          <option value="regret">遗憾（薛之谦那种）</option>
+        </select>
       </div>
       <button class="btn" type="submit" id="go">生成回忆闪片</button>
       <p class="err hidden" id="err" role="alert"></p>
@@ -143,7 +147,6 @@
         <button class="btn pill" id="copyLink" type="button">复制链接</button>
       </div>
       <button class="btn" id="copyMain" type="button">复制专属房间链接</button>
-        <button class="chip" id="exportVideo" type="button">导出 MP4</button>
       <p class="waiting" id="waitingText">把这条链接发给 TA。TA 点开，你们就一起看这十五秒。</p>
     </div>
 
