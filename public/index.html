@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#140b18">
 <title>阿呦的回忆胶 · 关系复原胶</title>
-<meta name="description" content="贴一段聊天记录，得到一支三十秒的 Q 版回忆短片，和一间回到初见的限时房间。">
+<meta name="description" content="写下你们的小故事，得到一支三十秒的 Q 版动画短片，和一间回到初见的限时房间。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231a1020'/%3E%3Ccircle cx='25' cy='28' r='7' fill='%23ff8a6b'/%3E%3Ccircle cx='41' cy='34' r='7' fill='%236bd5ff'/%3E%3Cpath d='M25 35v10M41 41v8' stroke='%23ffd9a0' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -24,7 +24,7 @@
   <!-- ── 首页 ─────────────────────────────────────────────── -->
   <section id="home">
     <h1 class="hero">暂借片刻幻境，<br>回看<em>相遇的起点</em>。</h1>
-    <p class="lede">贴一段聊天记录，我把它读成一支很短的小人闪片：初识、靠近、分享、沉默，再回到第一次说话的那天。<br><span>没有真人，没有脸，只有两个颜色。</span></p>
+    <p class="lede">写下你们的小故事，我把它做成一支三十秒的 Q 版动画：从相遇，到一起走过的小事，再到最后那一刻。<br><span>不需要聊天记录，你讲，我画。</span></p>
 
     <div class="field hidden" id="agentKeyField">
       <label>豆包 Key <small>你自己的火山方舟 Key；只存在你的浏览器，花的是你的 token</small></label>
@@ -48,27 +48,9 @@
     
     <form id="create" class="card" autocomplete="off">
       <div class="field">
-        <label for="log">聊天记录 <small>粘贴，或导入文件 / 截图</small></label>
-        <div class="imports">
-          <label class="chip" for="fileText">📄 导入文件</label>
-          <input id="fileText" type="file" multiple hidden accept=".txt,.md,.log,.csv,.json,.html,.htm,text/plain,text/csv,application/json">
-          <label class="chip" for="fileImage">🖼 导入聊天截图</label>
-          <input id="fileImage" type="file" multiple hidden accept="image/*">
-          <span class="imp" id="importState"></span>
-        </div>
-        <textarea id="log" required placeholder="2023-05-01 20:13 我：在吗？&#10;2023-05-01 20:14 小满：在呀，怎么啦&#10;2023-05-02 09:02 我：今天路过一家很好吃的店&#10;…"></textarea>
-        <p class="hint">支持 .txt / .json / .html / .csv，也可以拖进来；截图用本机的文字识别，图片不出这台电脑。</p>
-      </div>
-
-      <div class="field" id="appImportField">
-        <label>从应用导入 <small>打开应用 → 选中消息复制 → 粘贴导入</small></label>
-        <div class="apps">
-          <button type="button" class="app" data-app="wechat">微信</button>
-          <button type="button" class="app" data-app="qq">QQ</button>
-          <button type="button" class="app" data-app="douyin">抖音</button>
-          <button type="button" class="app" data-app="kuaishou">快手</button>
-        </div>
-        <div class="guide hidden" id="appGuide"></div>
+        <label for="log">你们的小故事 <small>你写的这段文字，会直接变成视频的提示词</small></label>
+        <textarea id="log" required placeholder="和谁，什么时候相遇；一起经历过什么小事；让你最感动的事是什么；你们是因为什么闹掰的。说得越详细，效果越好（亲情、友情、爱情都可以）。&#10;&#10;例：2019 年秋天，我在上海认识了她。那天她借了我一把伞……后来我们因为一次误会慢慢走散了。"></textarea>
+        <p class="hint">模板：和谁 · 什么时候相遇 · 一起经历过的小事 · 最感动的事 · 因为什么分开（写得越具体，片子越像你们）</p>
       </div>
 
       <div class="field">

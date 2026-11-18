@@ -164,27 +164,8 @@
       } catch (e) { appStatus(e instanceof Error ? e.message : '没有读出来。'); }
     });
   }
-  function bindImports() {
-    $('fileText').addEventListener('change', (event) => { void importFiles(event.target.files); event.target.value = ''; });
-    $('fileImage').addEventListener('change', (event) => { void importFiles(event.target.files); event.target.value = ''; });
-    document.querySelectorAll('.app').forEach((el) => el.addEventListener('click', () => showGuide(el.dataset.app)));
-    const form = $('create');
-    form.addEventListener('dragover', (event) => { event.preventDefault(); form.classList.add('dropping'); });
-    form.addEventListener('dragleave', () => form.classList.remove('dropping'));
-    form.addEventListener('drop', (event) => {
-      event.preventDefault();
-      form.classList.remove('dropping');
-      if (event.dataTransfer?.files?.length) void importFiles(event.dataTransfer.files);
-    });
-    /* 截图直接粘进输入框也可以 */
-    $('log').addEventListener('paste', (event) => {
-      const files = [...(event.clipboardData?.files ?? [])];
-      if (!files.length) return;
-      event.preventDefault();
-      void importFiles(files);
-    });
-  }
-
+  /* 不再解析聊天记录：导入入口已移除，这里保留空函数，避免旧引用报错 */
+  function bindImports() {}
   let mode = 'agent';
   const avatars = { me: '', peer: '' };
   const photos = [];
@@ -491,12 +472,12 @@
       const error = $('err');
       const button = $('go');
       error.classList.add('hidden');
-      if (log.length < 20) { error.textContent = '记录太短了，再多贴几句吧。'; error.classList.remove('hidden'); return; }
+      if (log.length < 20) { error.textContent = '故事太短了，再多写两句吧。'; error.classList.remove('hidden'); return; }
       button.disabled = true;
       const dense = log.split(String.fromCharCode(10)).filter((l) => l.trim()).length > 50;
       button.textContent = dense ? '信息密度较大，正在生成，请稍等…' : '正在为你生成你的专属视频…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: '', agentId: '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, storyText: log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: '', agentId: '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);

@@ -109,6 +109,47 @@ function buildScript(log, me, partner, segCount = 3) {
   };
 }
 
+/** 用户自己写的小故事 → 3 段脚本（不再解析聊天记录）。 */
+function buildScriptFromStory(text, me, partner) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  const parts = clean.split(/(?<=[。！？!?；;\n])/).map((s) => s.trim()).filter(Boolean);
+  const segCount = Math.min(3, Math.max(1, parts.length));
+  /* 按句子平均分到最多 3 段 */
+  const shots = ['缓慢推近', '轻轻横移', '慢慢拉远'];
+  const conflict = /(分开|分手|吵架|冷战|离开|走散|误会|闹掰|不理|失望)/;
+  const sweet = /(遇见|第一次|一起|温柔|开心|喜欢|爱|照顾|等我|陪伴|旅行|海|风)/;
+  const segments = [];
+  for (let i = 0; i < segCount; i += 1) {
+    const start = Math.floor((i * parts.length) / segCount);
+    const end = Math.floor(((i + 1) * parts.length) / segCount);
+    const chunk = parts.slice(start, Math.max(start + 1, end));
+    if (!chunk.length) break;
+    const chunkText = chunk.join('');
+    const sad = conflict.test(chunkText);
+    segments.push({
+      index: i + 1,
+      time: '第 ' + (i + 1) + ' 段',
+      scene: sad ? '夜里，两个人各自站着，风吹动衣角' : (i === 0 ? '初次见面的地方，光很软' : '两个人并肩走在有光的地方'),
+      shot: shots[i % shots.length],
+      subtitle: chunk[0].slice(0, 34),
+      emotion: sad ? '克制、遗憾' : '温柔、明亮',
+      who: '',
+      excerpt: chunkText.slice(0, 60),
+    });
+  }
+  return {
+    title: '你们的小故事',
+    characters: (me || '你') + ' 与 ' + (partner || 'TA'),
+    theme: conflict.test(clean) ? '从相遇到慢慢走散' : '那些被记下来的小事',
+    mood: conflict.test(clean) ? '温柔里带一点遗憾' : '温柔、治愈、回忆感',
+    arc: conflict.test(clean) ? 'break' : 'warm',
+    span: '',
+    messages: parts.length,
+    conflicts: (clean.match(new RegExp(conflict.source, 'g')) || []).length,
+    sweets: (clean.match(new RegExp(sweet.source, 'g')) || []).length,
+    segments,
+  };
+}
 const filmJobs = new Map();
 /* 站长的 Key：优先读 /opt/glue/owner-key.txt，其次环境变量。只留在服务器，绝不下发到浏览器。 */
 const OWNER_KEY = (() => {
@@ -682,7 +723,12 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ready: true, model: MODEL, hint: '' });
     }    if (path === '/api/rooms' && req.method === 'POST') {
       const body = await readBody(req, 8 * 1024 * 1024);
-      const log = String(body.log ?? '');
+      const rawStory = String(body.storyText ?? '').trim();
+      /* 用户写的是故事：先拆成对话样子的行，交给 analyze；脚本用故事版生成 */
+      const log = rawStory
+        ? rawStory.split(/(?<=[。！？!?；;])/).map((s) => s.trim()).filter(Boolean)
+          .map((s, i) => (i % 2 ? String(body.partner || 'TA') : String(body.me || '我')) + '：' + s).join(String.fromCharCode(10))
+        : String(body.log ?? '');
       if (log.length < 20) return json(res, 400, { error: '记录太短了，多贴几句吧。' });
       if (log.length > 60_000) return json(res, 400, { error: '记录有点长，先贴最近的一段吧。' });
       const mode = body.mode === 'agent' ? 'agent' : 'plain';
@@ -748,7 +794,7 @@ const server = createServer(async (req, res) => {
         }
       }
       /* 把脚本直接挂在 story 上，客户端不用再回传聊天记录 */
-      story.script = buildScript(log, story.me, story.partner, 3);
+      story.script = body.storyText ? buildScriptFromStory(String(body.storyText), story.me, story.partner) : buildScript(log, story.me, story.partner, 3);
       const id = randomBytes(9).toString('base64url');
       /** @type {Room} */
       const room = {
