@@ -717,6 +717,8 @@ const server = createServer(async (req, res) => {
           story.music = designed.music;
         }
       }
+      /* 把脚本直接挂在 story 上，客户端不用再回传聊天记录 */
+      story.script = buildScript(log, story.me, story.partner);
       const id = randomBytes(9).toString('base64url');
       /** @type {Room} */
       const room = {

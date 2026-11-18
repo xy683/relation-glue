@@ -697,13 +697,7 @@
     if ((story.mode || 'plain') !== 'agent') { await renderLocal(); return; }
 
     say('正在根据聊天记录生成回忆脚本…');
-    let script = null;
-    try {
-      const r = await fetch('/api/script', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log: lastLog, me: lastMe, partner: lastPartner }) });
-      const j = await r.json().catch(() => ({}));
-      script = j.script || null;
-    } catch (e) { script = null; }
-    /* 用站长的 Key，由后端调用模型；前端不需要任何 Key */
+    const script = story.script || null;
 
     let jobId = '';
     try {
