@@ -421,7 +421,7 @@
       }
       const state = document.getElementById('photoState');
       if (state) state.textContent = photos.length ? '已选 ' + photos.length + ' 张' : '';
-      void stylePhotos(state);
+
     });
     /* 手机上：第一次触摸就把音频解锁，否则整片没声音 */
     document.getElementById('agentModel')?.addEventListener('change', (event) => { localStorage.setItem('glue.agentModel', event.target.value); });
@@ -466,14 +466,12 @@
       if (!file) return;
       avatars.me = await readAvatar(file);
       if (avatars.me) { avaMeImg.src = avatars.me; avaMeBox.classList.add('has'); }
-      toChibi(avatars.me).then((url) => { if (url) { avatars.me = url; avaMeImg.src = url; } });
     });
     avaPeer?.addEventListener('change', async (event) => {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       avatars.peer = await readAvatar(file);
       if (avatars.peer) { avaPeerImg.src = avatars.peer; avaPeerBox.classList.add('has'); }
-      toChibi(avatars.peer).then((url) => { if (url) { avatars.peer = url; avaPeerImg.src = url; } });
     });
     void refreshAgent();
         /* 云端（Linux）没有本地应用可打开：把「从应用导入」收起来，只留粘贴/文件/截图 */
@@ -501,6 +499,19 @@
       if (log.length < 20) { error.textContent = '记录太短了，再多贴几句吧。'; error.classList.remove('hidden'); return; }
       button.disabled = true;
       button.textContent = '正在为你生成你的专属视频…';
+        /* 只有勾了「照片变 Q 版」才调 Seedream，花的是使用者自己的额度 */
+        const wantQ = document.getElementById('qstyleOn')?.checked;
+        if (wantQ && (avatars.me || avatars.peer || photos.length)) {
+          button.textContent = '正在把照片变成 Q 版…';
+          if (avatars.me) { const u = await toChibi(avatars.me); if (u) avatars.me = u; }
+          if (avatars.peer) { const u = await toChibi(avatars.peer); if (u) avatars.peer = u; }
+          if (photos.length) {
+            const idxs = photos.map((_, i) => i).slice(0, 4);
+            const urls = await Promise.all(idxs.map((i) => toChibi(photos[i])));
+            urls.forEach((url, k) => { if (url) photos[idxs[k]] = url; });
+          }
+          button.textContent = '正在为你生成你的专属视频…';
+        }
       try {
         const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
         const body = await res.json().catch(() => ({}));
