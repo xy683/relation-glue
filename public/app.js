@@ -188,6 +188,27 @@
   let mode = 'plain';
   const avatars = { me: '', peer: '' };
   const photos = [];
+  /** 把解码后的音频转成 16kHz 单声道 WAV，体积小、服务器也认。 */
+  function encodeWav(buffer) {
+    try {
+      const src = buffer.getChannelData(0);
+      const rate = 16000;
+      const ratio = buffer.sampleRate / rate;
+      const len = Math.floor(src.length / ratio);
+      const out = new ArrayBuffer(44 + len * 2);
+      const view = new DataView(out);
+      const write = (offset, text) => { for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i)); };
+      write(0, 'RIFF'); view.setUint32(4, 36 + len * 2, true); write(8, 'WAVE');
+      write(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+      view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+      write(36, 'data'); view.setUint32(40, len * 2, true);
+      for (let i = 0; i < len; i += 1) {
+        const v = Math.max(-1, Math.min(1, src[Math.floor(i * ratio)]));
+        view.setInt16(44 + i * 2, v * 0x7fff, true);
+      }
+      return new Blob([out], { type: 'audio/wav' });
+    } catch (e) { return null; }
+  }
   /** 从音频里找鼓点：20ms 一窗算能量，超过均值 1.6 倍且明显跃升就算一下。 */
   function detectBeats(buffer) {
     try {
@@ -328,13 +349,28 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       const state = document.getElementById('musicState');
-      if (state) state.textContent = '正在导入…';
+      if (state) state.textContent = '正在处理音乐…';
+      let payload = file;
+      let name = file.name;
       try {
-        const res = await fetch('/api/music', { method: 'POST', headers: { 'content-type': file.type || 'application/octet-stream', 'x-filename': encodeURIComponent(file.name) }, body: file });
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const ac = new AC();
+        const buf = await ac.decodeAudioData(await file.arrayBuffer());
+        beats = detectBeats(buf);
+        /* 视频或大文件：先在浏览器里转成 16k 单声道 WAV，传得更快 */
+        if (file.size > 1.5 * 1024 * 1024 || /^video[/]/.test(file.type)) {
+          const wav = encodeWav(buf);
+          if (wav && wav.size < file.size) { payload = wav; name = 'music.wav'; }
+        }
+        if (ac.close) ac.close();
+      } catch (e) { beats = []; }
+      if (state) state.textContent = '上传中… ' + Math.round(payload.size / 1024) + ' KB';
+      try {
+        const res = await fetch('/api/music', { method: 'POST', headers: { 'content-type': payload.type || 'application/octet-stream', 'x-filename': encodeURIComponent(name) }, body: payload });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || '导入失败');
         musicUrl = body.url;
-        if (state) state.textContent = '已导入：' + file.name;
+        if (state) state.textContent = '已导入：' + name + (beats.length ? '（' + beats.length + ' 个鼓点）' : '');
       } catch (e) {
         if (state) state.textContent = e instanceof Error ? e.message : '导入失败';
       }
