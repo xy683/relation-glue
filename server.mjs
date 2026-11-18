@@ -282,7 +282,9 @@ const server = createServer(async (req, res) => {
       const ffmpeg = process.platform === 'win32' ? 'C:/Users/Administrator/Doubao/tools/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
       const fontName = process.platform === 'win32' ? 'Microsoft YaHei' : 'Noto Sans CJK SC';
       try {
-        const out = await renderFilm(story, { ffmpeg, fontName, outDir: join(HERE, 'outputs') });
+        const themeName = story.theme || (story.music && story.music.theme) || 'miss';
+        const bgmFile = join(HERE, 'public', 'bgm', themeName + '.mp3');
+        const out = await renderFilm(story, { ffmpeg, fontName, bgmFile, outDir: join(HERE, 'outputs') });
         return json(res, 200, { url: '/outputs/' + out.id + '.mp4', seconds: out.seconds });
       } catch (e) {
         return json(res, 500, { error: e instanceof Error ? e.message : '渲染失败' });
