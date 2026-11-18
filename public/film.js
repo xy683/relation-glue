@@ -404,6 +404,43 @@ function drawPhoto(ctx, src, w, h, k, pulse) {
   ctx.fillRect(0, 0, w, h);
   return true;
 }
+
+/** 动漫感的小花瓣，慢慢飘。 */
+function petals(ctx, w, h, t) {
+  const r = rng(11);
+  ctx.save();
+  for (let i = 0; i < 16; i += 1) {
+    const x = ((r() * w + Math.sin(t / 2400 + i) * 40) % w + w) % w;
+    const y = ((r() * h + t * (0.02 + r() * 0.03)) % h);
+    const s = 3 + r() * 6;
+    ctx.globalAlpha = 0.12 + r() * 0.2;
+    ctx.fillStyle = i % 3 === 0 ? 'rgba(255,200,210,0.9)' : 'rgba(255,230,210,0.8)';
+    ctx.beginPath();
+    ctx.ellipse(x, y, s, s * 0.6, t / 3000 + i, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** 动漫字幕条：底部一条半透明带，字居中，淡入淡出。 */
+function subtitle(ctx, w, h, text, alpha) {
+  if (!text || alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const band = ctx.createLinearGradient(0, h * 0.8, 0, h * 0.9);
+  band.addColorStop(0, 'rgba(6,4,8,0)');
+  band.addColorStop(0.35, 'rgba(6,4,8,0.55)');
+  band.addColorStop(1, 'rgba(6,4,8,0)');
+  ctx.fillStyle = band;
+  ctx.fillRect(0, h * 0.8, w, h * 0.1);
+  ctx.font = '500 40px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = 'rgba(255,248,240,0.95)';
+  ctx.fillText(text.slice(0, 34), w / 2, h * 0.862);
+  ctx.restore();
+}
   function draw(canvas, story, t) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = W;
@@ -465,7 +502,7 @@ function drawPhoto(ctx, src, w, h, k, pulse) {
         while (j + 1 < cuts.length && cuts[j + 1] <= t) j += 1;
         pulse = Math.max(0, 1 - (t - cuts[j]) / 260);
       }
-      if (photoReady(photoList[idx])) painted = drawPhoto(ctx, photoList[idx], w, h, progress, pulse);
+      if (photoReady(photoList[idx])) { painted = drawPhoto(ctx, photoList[idx], w, h, progress, pulse); if (painted) petals(ctx, w, h, t); }
     }
     if (!painted) backdrop(ctx, w, h, act, next, blend, t);
 
@@ -534,7 +571,12 @@ function drawPhoto(ctx, src, w, h, k, pulse) {
 
     /* 气泡：每镜最多一句，来自真实聊天记录 */
     const said = story && story.acts && story.acts[i] && story.acts[i].bubbles && story.acts[i].bubbles[0];
-    if (said && said.text) {
+    if (said && said.text && painted) {
+      const subA = clamp((local - 0.12) / 0.22, 0, 1) * (1 - clamp((local - 0.86) / 0.12, 0, 1));
+      subtitle(ctx, w, h, said.text, subA);
+    }
+
+    if (said && said.text && !painted) {
       const who = said.who && story.me && said.who !== story.me ? 'right' : 'left';
       const reveal = clamp((local - 0.18) / 0.42, 0, 1);
       const alpha = clamp((local - 0.12) / 0.2, 0, 1) * (i === 3 ? 0.72 : 1);
