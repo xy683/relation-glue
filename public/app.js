@@ -491,6 +491,9 @@
     $('create').addEventListener('submit', async (event) => {
       event.preventDefault();
       const log = $('log').value.trim();
+      lastLog = log;
+      lastMe = $('me').value.trim();
+      lastPartner = $('partner').value.trim();
       const me = $('me').value.trim();
       const partner = $('partner').value.trim();
       const error = $('err');
@@ -659,6 +662,9 @@
 
   /* 成片自动出：普通模式走本地 ffmpeg；智能体模式先试 AI 动画，失败自动退回本地 */
   let filmStarted = false;
+  let lastLog = '';
+  let lastMe = '';
+  let lastPartner = '';
   function filmDone(url) {
     const st = $('filmState');
     if (!st) return;
@@ -677,25 +683,57 @@
     filmStarted = true;
     const st = $('filmState');
     const say = (text) => { if (st) st.textContent = text; };
-    const mode = story.mode || 'plain';
-    try {
-      if (mode === 'agent') {
-        const key = localStorage.getItem('glue.agentKey') || '';
-        if (key) {
-          say('正在生成 AI 动画（6 段 × 10 秒，约 20 分钟）…');
-          const res = await fetch('/api/film', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, story }) });
-          const body = await res.json().catch(() => ({}));
-          if (res.ok && body.url) { filmDone(body.url); return; }
-          say('AI 动画没出来（' + String(body.error || '未知原因').slice(0, 60) + '），改用本地渲染…');
-        }
-      }
+
+    async function renderLocal() {
       say('正在渲染成片（约 30 秒）…');
-      const res2 = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story }) });
-      const b2 = await res2.json().catch(() => ({}));
-      if (res2.ok && b2.url) filmDone(b2.url);
-      else say('成片没出来：' + String(b2.error || '再试一次'));
+      try {
+        const res = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story }) });
+        const b = await res.json().catch(() => ({}));
+        if (res.ok && b.url) filmDone(b.url);
+        else say('成片没出来：' + String(b.error || '再试一次'));
+      } catch (e) { say('成片没出来：' + (e instanceof Error ? e.message : '网络错误')); }
+    }
+
+    if ((story.mode || 'plain') !== 'agent') { await renderLocal(); return; }
+
+    say('正在根据聊天记录生成回忆脚本…');
+    let script = null;
+    try {
+      const r = await fetch('/api/script', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log: lastLog, me: lastMe, partner: lastPartner }) });
+      const j = await r.json().catch(() => ({}));
+      script = j.script || null;
+    } catch (e) { script = null; }
+    if (script && st) {
+      const box = document.createElement('div');
+      box.style.cssText = 'margin-top:8px;line-height:1.7;font-size:12px;color:#e8d9cf;text-align:left;';
+      const rows = (script.segments || []).map((s) => s.index + '. ' + s.time + ' · ' + s.scene + ' · ' + s.shot + ' · 字幕「' + s.subtitle + '」');
+      box.innerHTML = '<b>' + script.characters + '</b><br>' + script.theme + '<br>' + rows.join('<br>');
+      st.textContent = '';
+      st.appendChild(box);
+    }
+
+    const key = localStorage.getItem('glue.agentKey') || '';
+    if (!key) { await renderLocal(); return; }
+    let jobId = '';
+    try {
+      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, script, musicUrl: story.musicUrl, images: story.images }) });
+      const jb = await jr.json().catch(() => ({}));
+      if (!jr.ok) throw new Error(jb.error || '任务没建成');
+      jobId = jb.id;
     } catch (e) {
-      say('成片没出来：' + (e instanceof Error ? e.message : '网络错误'));
+      say('AI 动画没出来（' + (e instanceof Error ? e.message : '未知') + '），改用本地渲染…');
+      await renderLocal();
+      return;
+    }
+    for (let k = 0; k < 900; k += 1) {
+      await new Promise((ok) => setTimeout(ok, 2000));
+      let s = null;
+      try { s = await (await fetch('/api/film-jobs/' + jobId)).json(); } catch (e) { continue; }
+      if (!s) continue;
+      if (s.phase === 'segments') say('正在生成第 ' + s.step + '/' + s.total + ' 段视频…');
+      else if (s.phase === 'concat') say('正在拼接完整回忆短片…');
+      if (s.status === 'done') { filmDone(s.url); return; }
+      if (s.status === 'error') { say('AI 动画没出来：' + s.error); return; }
     }
   }
   /** 等待的时候，房主先看一支循环的预告；另一个人进来就换成同步的正式播放。 */

@@ -34,10 +34,163 @@ const LEAD_MS = 1500;
 /** @typedef {{ id: string, hostToken: string, createdAt: number, names: { me: string, partner: string }, story: any, status: 'waiting'|'film'|'confirm'|'declined'|'chat'|'ended', joined: { host: boolean, guest: boolean }, confirm: { host: boolean|null, guest: boolean|null }, filmStart: number|null, chatEnd: number|null, messages: Array<{ id: string, from: 'host'|'guest', name: string, text: string, at: number }>, sse: Set<any>, timers: NodeJS.Timeout[] }} Room */
 
 /** Every room, by its link's id. */
+/* ── 聊天记录 → 回忆脚本 ───────────────────────────────── */
+
+const CONFLICT_RE = /(分手|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见|累了)/;
+const SWEET_RE = /(想你|抱抱|喜欢|爱你|晚安|早安|开心|么么|宝贝|陪你|等你)/;
+
+function parseChatLines(log) {
+  return String(log || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const m = line.match(/^(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})?\s*(\d{1,2}:\d{2})?\s*([^：:]{1,16})[：:]\s*(.*)$/);
+      if (m) return { date: m[1] || '', time: m[2] || '', who: m[3].trim(), text: m[4].trim() };
+      return { date: '', time: '', who: '', text: line };
+    });
+}
+
+function sceneOf(hour) {
+  const h = Number(hour);
+  if (!Number.isFinite(h)) return '夜里';
+  if (h >= 5 && h < 9) return '清晨';
+  if (h >= 9 && h < 12) return '上午';
+  if (h >= 12 && h < 17) return '午后';
+  if (h >= 17 && h < 22) return '傍晚';
+  return '深夜';
+}
+
+/** 从聊天记录里整理出一条 6 段 × 10 秒的回忆脚本。 */
+function buildScript(log, me, partner) {
+  const lines = parseChatLines(log);
+  const who1 = me || '我';
+  const who2 = partner || 'TA';
+  const text = lines.map((l) => l.text).join('\n');
+  const conflicts = (text.match(new RegExp(CONFLICT_RE.source, 'g')) || []).length;
+  const sweets = (text.match(new RegExp(SWEET_RE.source, 'g')) || []).length;
+  const arc = conflicts >= 2 && conflicts >= sweets ? 'break' : 'warm';
+  const dates = lines.map((l) => l.date).filter(Boolean);
+  const firstDate = dates[0] || '';
+  const lastDate = dates[dates.length - 1] || '';
+  const per = Math.max(1, Math.ceil(lines.length / 6));
+  const shots = ['缓慢推近', '轻轻横移', '停住不动', '慢慢拉远', '贴近细节', '缓缓升起'];
+  const segments = [];
+  for (let i = 0; i < 6; i += 1) {
+    const chunk = lines.slice(i * per, (i + 1) * per);
+    if (!chunk.length) break;
+    const chunkText = chunk.map((l) => l.text).join(' ');
+    const sad = CONFLICT_RE.test(chunkText);
+    const mood = sad ? '沉默、克制' : '温柔、靠近';
+    const hour = (chunk[0].time || '').split(':')[0];
+    const line = chunk.find((l) => l.text.length >= 4 && l.text.length <= 22) || chunk[0];
+    segments.push({
+      index: i + 1,
+      time: [chunk[0].date, chunk[0].time].filter(Boolean).join(' ') || ('第 ' + (i + 1) + ' 段'),
+      scene: sceneOf(hour) + (sad ? '，两个人各自看着屏幕' : '，两个小人靠在一起'),
+      shot: shots[i % shots.length],
+      subtitle: line.text.slice(0, 22),
+      emotion: mood,
+      who: line.who || '',
+      excerpt: chunk.slice(0, 2).map((l) => (l.who ? l.who + '：' : '') + l.text).join(' / ').slice(0, 60),
+    });
+  }
+  return {
+    title: '从「' + (lines[0]?.text || '在吗').slice(0, 12) + '」开始的回忆',
+    characters: who1 + ' 与 ' + who2,
+    theme: arc === 'break' ? '从满怀期待，到慢慢走散' : '那些以为会一直继续的日子',
+    mood: arc === 'break' ? '温柔里带一点遗憾' : '温柔、治愈、回忆感',
+    arc,
+    span: firstDate && lastDate ? firstDate + ' — ' + lastDate : '',
+    messages: lines.length,
+    conflicts,
+    sweets,
+    segments,
+  };
+}
+
+const filmJobs = new Map();
 const rooms = new Map();
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon' };
 
+async function runFilmJob(id, opts) {
+  const job = filmJobs.get(id);
+  const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
+  const ffmpeg = process.platform === 'win32' ? 'C:/Users/Administrator/Doubao/tools/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
+  try {
+    const segs = Array.isArray(opts.script.segments) ? opts.script.segments.slice(0, 6) : [];
+    if (!segs.length) throw new Error('脚本里没有分镜。');
+    job.total = segs.length;
+    const refs = (Array.isArray(opts.images) ? opts.images : []).filter((s) => typeof s === 'string' && s.startsWith('/qstyle/')).slice(0, 1);
+    const refUrl = refs.length ? 'http://' + opts.host + refs[0] : '';
+    const outs = [];
+    for (let i = 0; i < segs.length; i += 1) {
+      job.phase = 'segments';
+      job.step = i + 1;
+      const seg = segs[i];
+      const prompt = [
+        '极简 Q 版小人动画，温柔、治愈、回忆感、低饱和柔光，不要真人，不要复杂五官，不要夸张剧情。',
+        '这一镜：' + (seg.scene || '') + '；镜头' + (seg.shot || '缓慢推近') + '；情绪' + (seg.emotion || '温柔') + '。',
+        seg.subtitle ? '字幕只出现这一句：' + seg.subtitle : '',
+        '人物形象与参考图完全一致，背景干净。',
+      ].filter(Boolean).join('\n');
+      const content = [{ type: 'text', text: prompt }];
+      if (refUrl) content.push({ type: 'image_url', image_url: { url: refUrl } });
+      const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
+        body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: 10 }),
+      });
+      const raw = await created.text();
+      if (!created.ok) {
+        let msg = raw.slice(0, 200);
+        try { const j = JSON.parse(raw); msg = j.error?.message || msg; } catch { /* 忽略 */ }
+        throw new Error('第 ' + (i + 1) + ' 段：' + msg);
+      }
+      const taskId = JSON.parse(raw).id;
+      let videoUrl = '';
+      for (let k = 0; k < 120; k += 1) {
+        await new Promise((ok) => setTimeout(ok, 3000));
+        const st = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/' + taskId, { headers: { authorization: 'Bearer ' + opts.key } });
+        const sj = await st.json().catch(() => ({}));
+        if (sj.status === 'succeeded') { videoUrl = sj.content?.video_url || ''; break; }
+        if (sj.status === 'failed') throw new Error('第 ' + (i + 1) + ' 段生成失败。');
+      }
+      if (!videoUrl) throw new Error('第 ' + (i + 1) + ' 段超时。');
+      const bin = await fetch(videoUrl);
+      writeFileSync(join(dir, i + '.mp4'), Buffer.from(await bin.arrayBuffer()));
+      outs.push(join(dir, i + '.mp4'));
+    }
+    job.phase = 'concat';
+    const outDir = join(HERE, 'outputs');
+    mkdirSync(outDir, { recursive: true });
+    const outFile = join(outDir, id + '.mp4');
+    const list = join(dir, 'list.txt');
+    writeFileSync(list, outs.map((f) => "file '" + f.replace(/'/g, "'\\''") + "'").join('\n'));
+    const bgm = opts.musicUrl ? join(HERE, 'public', opts.musicUrl.replace(/^\//, '')) : '';
+    const args = ['-y', '-f', 'concat', '-safe', '0', '-i', list];
+    if (bgm && existsSync(bgm)) args.push('-i', bgm);
+    args.push('-vf', 'fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1');
+    if (bgm && existsSync(bgm)) args.push('-map', '0:v', '-map', '1:a', '-shortest', '-c:a', 'aac', '-b:a', '160k');
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
+    const okRun = await new Promise((ok) => {
+      const child = spawn(ffmpeg, args, { stdio: 'ignore' });
+      child.on('exit', (code) => ok(code === 0));
+      child.on('error', () => ok(false));
+    });
+    if (!okRun) throw new Error('拼接失败。');
+    job.phase = 'done';
+    job.status = 'done';
+    job.url = '/outputs/' + id + '.mp4';
+  } catch (e) {
+    job.status = 'error';
+    job.error = e instanceof Error ? e.message : String(e);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    setTimeout(() => filmJobs.delete(id), 60 * 60 * 1000);
+  }
+}
 function json(res, status, body) {
   const text = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'content-length': Buffer.byteLength(text) });
@@ -364,7 +517,31 @@ const server = createServer(async (req, res) => {
         outExt = 'm4a';
       }
       return json(res, 200, { url: '/music/' + id + '.' + outExt });
-    }    /* 成片：4 段 15 秒的 Seedance 视频，逐段带同一张 Q 版参考图，最后拼接 + 用户 BGM */
+    }    /* 脚本预览：聊天记录 → 人物 / 主题 / 6 段分镜 */
+    if (path === '/api/script' && req.method === 'POST') {
+      const body = await readBody(req, 8 * 1024 * 1024);
+      const script = buildScript(String(body.log ?? ''), String(body.me ?? ''), String(body.partner ?? ''));
+      return json(res, 200, { script });
+    }
+
+    /* 成片任务：后台逐段生成，前端轮询进度 */
+    if (path === '/api/film-jobs' && req.method === 'POST') {
+      const body = await readBody(req, 16 * 1024 * 1024);
+      const key = String(body.key ?? '').trim();
+      if (!key) return json(res, 400, { error: '需要你自己的豆包 Key。' });
+      const id = randomBytes(6).toString('hex');
+      const host = String(req.headers.host || 'localhost');
+      filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 6, url: '', error: '', at: Date.now() });
+      void runFilmJob(id, { key, script: body.script || {}, musicUrl: String(body.musicUrl ?? ''), images: body.images || [], host });
+      return json(res, 200, { id });
+    }
+    if (path.startsWith('/api/film-jobs/') && req.method === 'GET') {
+      const id = path.split('/')[3];
+      const job = filmJobs.get(id);
+      if (!job) return json(res, 404, { error: '任务不见了。' });
+      return json(res, 200, job);
+    }
+    /* 成片：4 段 15 秒的 Seedance 视频，逐段带同一张 Q 版参考图，最后拼接 + 用户 BGM */
     if (path === '/api/film' && req.method === 'POST') {
       const body = await readBody(req, 16 * 1024 * 1024);
       const key = String(body.key ?? '').trim();
