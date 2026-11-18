@@ -333,23 +333,73 @@ function photoReady(src) {
 function drawPhoto(ctx, src, w, h, k, pulse) {
   const img = photoCache.get(src);
   if (!img || !img.ready) return false;
-  const punch = (pulse || 0) * 0.07;
-  const scale = 1.04 + k * 0.14 + punch;
-  const s = Math.max(w / img.width, h / img.height) * scale;
-  const dw = img.width * s;
-  const dh = img.height * s;
+  const cw = w * 0.74;
+  const ch = h * 0.44;
+  const bob = Math.sin((k * 6 + pulse * 2) * 1.4) * 6 + (pulse || 0) * 14;
+  const tilt = (pulse || 0) * 0.012;
+
   ctx.save();
-  ctx.globalAlpha = 0.92;
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate((pulse || 0) * 0.008);
-  ctx.translate(-w / 2, -h / 2);
-  ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  /* 卡片阴影 */
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 40;
+  ctx.shadowOffsetY = 18;
+  ctx.translate(w / 2, h * 0.5 + bob);
+  ctx.rotate(tilt);
+  roundRect(ctx, -cw / 2, -ch / 2, cw, ch, 34);
+  ctx.fillStyle = 'rgba(20,12,24,0.55)';
+  ctx.fill();
   ctx.restore();
+
+  /* 图片本体 */
+  ctx.save();
+  ctx.translate(w / 2, h * 0.5 + bob);
+  ctx.rotate(tilt);
+  roundRect(ctx, -cw / 2, -ch / 2, cw, ch, 34);
+  ctx.clip();
+  const s = Math.max(cw / img.width, ch / img.height) * (1.02 + (pulse || 0) * 0.03);
+  ctx.drawImage(img, -(img.width * s) / 2, -(img.height * s) / 2, img.width * s, img.height * s);
+  /* 卡片内的一层柔光，像贴纸 */
+  const glow = ctx.createLinearGradient(0, -ch / 2, 0, ch / 2);
+  glow.addColorStop(0, 'rgba(255,255,255,0.10)');
+  glow.addColorStop(0.55, 'rgba(255,255,255,0)');
+  glow.addColorStop(1, 'rgba(255,190,150,0.10)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
+  ctx.restore();
+
+  /* 卡片的描边 */
+  ctx.save();
+  ctx.translate(w / 2, h * 0.5 + bob);
+  ctx.rotate(tilt);
+  ctx.strokeStyle = 'rgba(255,214,180,0.35)';
+  ctx.lineWidth = 3;
+  roundRect(ctx, -cw / 2, -ch / 2, cw, ch, 34);
+  ctx.stroke();
+  ctx.restore();
+
+  /* 鼓点上的小星点 */
+  if ((pulse || 0) > 0.05) {
+    ctx.save();
+    ctx.globalAlpha = (pulse || 0) * 0.9;
+    for (let n = 0; n < 8; n += 1) {
+      const a = (n / 8) * Math.PI * 2 + k;
+      const r = Math.min(w, h) * (0.28 + (pulse || 0) * 0.08);
+      const x = w / 2 + Math.cos(a) * r;
+      const y = h * 0.5 + Math.sin(a) * r * 0.8;
+      ctx.fillStyle = n % 2 ? 'rgba(255,214,180,0.9)' : 'rgba(180,200,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(x, y, 3 + (pulse || 0) * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /* 顶部/底部压暗，让字幕读得清 */
   const veil = ctx.createLinearGradient(0, 0, 0, h);
-  veil.addColorStop(0, 'rgba(8,5,10,0.42)');
-  veil.addColorStop(0.42, 'rgba(8,5,10,0.10)');
-  veil.addColorStop(0.62, 'rgba(8,5,10,0.14)');
-  veil.addColorStop(1, 'rgba(8,5,10,0.5)');
+  veil.addColorStop(0, 'rgba(8,5,10,0.5)');
+  veil.addColorStop(0.3, 'rgba(8,5,10,0.05)');
+  veil.addColorStop(0.75, 'rgba(8,5,10,0.1)');
+  veil.addColorStop(1, 'rgba(8,5,10,0.55)');
   ctx.fillStyle = veil;
   ctx.fillRect(0, 0, w, h);
   return true;
