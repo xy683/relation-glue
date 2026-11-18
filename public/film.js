@@ -322,6 +322,33 @@ function portrait(ctx, src, x, y, w, h, alpha, tilt, t, side) {
   ctx.stroke();
   ctx.restore();
 }
+
+/* ── 照片：当成底片，慢慢推近，压一层暗色让字看得清 ── */
+const photoCache = new Map();
+function photoReady(src) {
+  let item = photoCache.get(src);
+  if (!item) { item = new Image(); item.src = src; item.onload = () => { item.ready = true; }; photoCache.set(src, item); }
+  return item.ready;
+}
+function drawPhoto(ctx, src, w, h, k) {
+  const img = photoCache.get(src);
+  if (!img || !img.ready) return false;
+  const scale = 1.04 + k * 0.14;
+  const s = Math.max(w / img.width, h / img.height) * scale;
+  const dw = img.width * s;
+  const dh = img.height * s;
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  ctx.restore();
+  const veil = ctx.createLinearGradient(0, 0, 0, h);
+  veil.addColorStop(0, 'rgba(10,6,12,0.55)');
+  veil.addColorStop(0.5, 'rgba(10,6,12,0.35)');
+  veil.addColorStop(1, 'rgba(10,6,12,0.75)');
+  ctx.fillStyle = veil;
+  ctx.fillRect(0, 0, w, h);
+  return true;
+}
   function draw(canvas, story, t) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = W;
@@ -355,7 +382,14 @@ function portrait(ctx, src, x, y, w, h, alpha, tilt, t, side) {
     ctx.scale(push, push);
     ctx.translate(-w / 2, -h * 0.55);
 
-    backdrop(ctx, w, h, act, next, blend, t);
+    const photoList = story && Array.isArray(story.images) ? story.images : [];
+    let painted = false;
+    if (photoList.length) {
+      const per = total / photoList.length;
+      const idx = Math.min(photoList.length - 1, Math.floor(t / per));
+      if (photoReady(photoList[idx])) painted = drawPhoto(ctx, photoList[idx], w, h, (t % per) / per);
+    }
+    if (!painted) backdrop(ctx, w, h, act, next, blend, t);
 
     /* 地面的一条微光，把两个人放在同一个空间里 */
     const floorY = h * 0.735;
