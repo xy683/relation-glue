@@ -210,6 +210,49 @@ const PAY_TOKEN = (() => {
 })();
 const sameSecret = (a, b) => Boolean(a) && Boolean(b) && a.length === b.length
   && createHash('sha256').update(a).digest('hex') === createHash('sha256').update(b).digest('hex');
+
+/* 虎皮椒（个人聚合支付，不用执照、不用挂机）：appid + 密钥 配好就等于接了支付宝/微信 */
+const XUNHU = (() => {
+  const appid = String(process.env.XUNHU_APPID || '').trim();
+  const secret = String(process.env.XUNHU_APPSECRET || '').trim();
+  if (appid && secret) return { appid, secret };
+  try {
+    const lines = readFileSync(join(HERE, 'xunhu.txt'), 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (lines.length >= 2) return { appid: lines[0], secret: lines[1] };
+  } catch { /* 没配 */ }
+  return null;
+})();
+function xunhuHash(params, secret) {
+  const keys = Object.keys(params)
+    .filter((k) => k !== 'hash' && params[k] !== null && params[k] !== undefined && String(params[k]) !== '')
+    .sort();
+  return createHash('md5').update(keys.map((k) => k + '=' + params[k]).join('&') + secret).digest('hex');
+}
+async function createXunhuPayment(room) {
+  const o = room.order;
+  const params = {
+    version: '1.1',
+    appid: XUNHU.appid,
+    trade_order_id: o.id,
+    total_fee: o.amount.toFixed(2),
+    title: '关系复原胶 三十秒动漫小故事',
+    time: Math.floor(Date.now() / 1000),
+    notify_url: BASE_URL + '/api/pay/xunhu',
+    return_url: BASE_URL + '/r/' + room.id,
+    nonce_str: randomBytes(8).toString('hex'),
+    plugins: 'glue',
+    attach: room.id,
+  };
+  params.hash = xunhuHash(params, XUNHU.secret);
+  const r = await fetch('https://api.xunhupay.com/payment/do.html', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!j || Number(j.errcode) !== 0) throw new Error(String(j.errmsg || '支付下单失败'));
+  return { url: String(j.url || ''), qr: String(j.url_qrcode || '') };
+}
 function createOrder(room) {
   const id = randomBytes(6).toString('hex');
   room.order = { id, amount: ORDER_PRICE, status: 'awaiting', at: Date.now(), confirmToken: randomBytes(9).toString('base64url') };
@@ -576,6 +619,7 @@ function publicState(room, now = Date.now()) {
     story: Object.assign({}, room.story, { beats: [] }),
     filmUrl: room.filmUrl || '',
     order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status } : null,
+    payXunhu: Boolean(XUNHU),
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
   };
 }
@@ -1096,6 +1140,23 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, url: '/pay/' + kind + '.jpg', bytes: bytes.length });
     }
 
+    /* 虎皮椒回调：验签 + 金额核对，通过就自动放行 */
+    if (path === '/api/pay/xunhu') {
+      if (!XUNHU) return json(res, 503, { error: '还没配置虎皮椒。' });
+      const raw = await readImage(req, 64 * 1024).then((b) => b.toString('utf8')).catch(() => '');
+      const body = Object.fromEntries(new URLSearchParams(raw));
+      const ok = String(body.hash || '') === xunhuHash(body, XUNHU.secret);
+      if (ok && String(body.status) === 'OD') {
+        const room = orders.get(String(body.trade_order_id || ''));
+        const amount = Number(body.total_fee || 0);
+        if (room && room.order && amount >= room.order.amount - 0.01 && room.status === 'waiting' && !room.filmUrl) {
+          beginPaidFilm(room);
+        }
+      }
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      return res.end(ok ? 'success' : 'fail');
+    }
+
     /* 站长在微信里点一下：确认到账并开始生成 */
     if (path === '/pay/confirm' && req.method === 'GET') {
       const t = String(url.searchParams.get('t') || '');
@@ -1227,8 +1288,12 @@ const server = createServer(async (req, res) => {
         if (role !== 'host') return json(res, 403, { error: '只有发起链接的人可以充值。' });
         if (room.status !== 'waiting') return json(res, 409, { error: '现在不是充值的时候。' });
         if (!room.order || room.order.status === 'cancelled' || room.order.status === 'failed') createOrder(room);
+        let payment = null;
+        if (XUNHU) {
+          try { payment = await createXunhuPayment(room); } catch (e) { payment = { error: e instanceof Error ? e.message : String(e) }; }
+        }
         tell(room);
-        return json(res, 200, { order: { id: room.order.id, amount: room.order.amount, status: room.order.status } });
+        return json(res, 200, { order: { id: room.order.id, amount: room.order.amount, status: room.order.status }, payment });
       }
 
       /* 顾客点「我已完成付款」：进入待确认，不调模型 */

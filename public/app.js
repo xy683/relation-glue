@@ -794,6 +794,13 @@
     $('payStep2').classList.add('hidden');
     $('payState').textContent = '';
     $('payDone').disabled = false;
+    const x = Boolean(room.state && room.state.payXunhu);
+    const qrs = document.querySelector('.pay-qrs');
+    if (qrs) qrs.classList.toggle('hidden', x);
+    const go = $('payGo');
+    if (go) go.classList.toggle('hidden', !x);
+    const qr = $('payQr');
+    if (qr) qr.classList.add('hidden');
   }
   function closePay() {
     const modal = $('payModal');
@@ -812,7 +819,12 @@
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || '订单没建成');
-      $('payState').textContent = '扫码付 29.9 元；付完点上面的按钮。';
+      const pay = body.payment || {};
+      if (pay.url) { const go = $('payGo'); if (go) { go.href = pay.url; go.classList.remove('hidden'); } }
+      if (pay.qr) { const qr = $('payQr'); if (qr) { qr.src = pay.qr; qr.classList.remove('hidden'); } }
+      if (pay.error) throw new Error('支付下单失败：' + pay.error);
+      const x = Boolean(room.state && room.state.payXunhu);
+      $('payState').textContent = x ? '点上面按钮去支付；付完自动开始，不用再操作。' : '扫码付 29.9 元；付完点上面的按钮。';
     } catch (e) {
       $('payState').textContent = e instanceof Error ? e.message : '订单没建成';
     }
