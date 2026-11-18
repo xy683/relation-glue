@@ -364,6 +364,81 @@ const server = createServer(async (req, res) => {
         outExt = 'm4a';
       }
       return json(res, 200, { url: '/music/' + id + '.' + outExt });
+    }    /* 成片：4 段 15 秒的 Seedance 视频，逐段带同一张 Q 版参考图，最后拼接 + 用户 BGM */
+    if (path === '/api/film' && req.method === 'POST') {
+      const body = await readBody(req, 16 * 1024 * 1024);
+      const key = String(body.key ?? '').trim();
+      if (!key) return json(res, 400, { error: '需要你自己的豆包 Key。' });
+      const story = body.story || {};
+      const model = String(body.model ?? 'doubao-seedance-2-5-flash-261115');
+      const acts = Array.isArray(story.acts) ? story.acts.slice(0, 5) : [];
+      if (!acts.length) return json(res, 400, { error: '缺少分镜。' });
+      const refs = Array.isArray(story.images) ? story.images.filter((s) => typeof s === 'string' && s.startsWith('/qstyle/')).slice(0, 1) : [];
+      const refUrl = refs.length ? ('https://' + String(req.headers.host || 'localhost') + refs[0]) : '';
+      const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
+      const outs = [];
+      try {
+        for (let i = 0; i < 4; i += 1) {
+          const act = acts[Math.min(i, acts.length - 1)] || {};
+          const line = act.bubbles && act.bubbles[0] ? act.bubbles[0].text : '';
+          const prompt = [
+            '极简 Q 版小人动画，温柔、治愈、回忆感、低饱和柔光，不要真人，不要复杂五官。',
+            '第 ' + (i + 1) + ' 段（15 秒）：' + (act.title || '回忆') + '。' + (act.note || ''),
+            line ? '字幕只出现这句：' + line : '',
+            '镜头缓慢推近，画面干净，人物形象与参考图完全一致。',
+          ].filter(Boolean).join('\n');
+          const content = [{ type: 'text', text: prompt }];
+          if (refUrl) content.push({ type: 'image_url', image_url: { url: refUrl } });
+          const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+            body: JSON.stringify({ model, content, ratio: '9:16', duration: 15 }),
+          });
+          const rawCreate = await created.text();
+          if (!created.ok) {
+            let msg = rawCreate.slice(0, 200);
+            try { const j = JSON.parse(rawCreate); msg = j.error?.message || msg; } catch { /* 忽略 */ }
+            return json(res, 502, { error: '视频接口：' + msg });
+          }
+          const taskId = JSON.parse(rawCreate).id;
+          let videoUrl = '';
+          for (let k = 0; k < 100; k += 1) {
+            await new Promise((ok) => setTimeout(ok, 3000));
+            const st = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/' + taskId, { headers: { authorization: 'Bearer ' + key } });
+            const stJson = await st.json().catch(() => ({}));
+            if (stJson.status === 'succeeded') { videoUrl = stJson.content?.video_url || ''; break; }
+            if (stJson.status === 'failed') return json(res, 502, { error: '第 ' + (i + 1) + ' 段生成失败。' });
+          }
+          if (!videoUrl) return json(res, 504, { error: '第 ' + (i + 1) + ' 段超时了。' });
+          const file = join(dir, i + '.mp4');
+          const bin = await fetch(videoUrl);
+          writeFileSync(file, Buffer.from(await bin.arrayBuffer()));
+          outs.push(file);
+        }
+        const outDir = join(HERE, 'outputs');
+        mkdirSync(outDir, { recursive: true });
+        const id = randomBytes(6).toString('hex');
+        const outFile = join(outDir, id + '.mp4');
+        const list = join(dir, 'list.txt');
+        writeFileSync(list, outs.map((f) => "file '" + f.replace(/'/g, "'\\''") + "'").join('\n'));
+        const bgmSrc = story.musicUrl ? join(HERE, 'public', story.musicUrl.replace(/^\//, '')) : '';
+        const ffmpeg = process.platform === 'win32' ? 'C:/Users/Administrator/Doubao/tools/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
+        const args = ['-y', '-f', 'concat', '-safe', '0', '-i', list];
+        if (bgmSrc && existsSync(bgmSrc)) args.push('-i', bgmSrc);
+        args.push('-filter_complex', '[0:v]fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1[v]');
+        args.push('-map', '[v]');
+        if (bgmSrc && existsSync(bgmSrc)) args.push('-map', '1:a', '-shortest', '-c:a', 'aac', '-b:a', '160k');
+        args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
+        const okRun = await new Promise((ok) => {
+          const child = spawn(ffmpeg, args, { stdio: 'ignore' });
+          child.on('exit', (code) => ok(code === 0));
+          child.on('error', () => ok(false));
+        });
+        if (!okRun) return json(res, 500, { error: '拼接失败。' });
+        return json(res, 200, { url: '/outputs/' + id + '.mp4', segments: outs.length });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     }    /* 连通性测试：用使用者自己的 Key + 智能体 ID 发一句话 */
     if (path === '/api/agent/test' && req.method === 'POST') {
       const body = await readBody(req);
