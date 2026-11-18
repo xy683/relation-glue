@@ -275,5 +275,12 @@
     } catch { /* ignore */ }
   }
 
-  window.GlueMusic = { start, stop, unlock, get playing() { return state.playing; } };
+  /** 解锁后被调用：如果之前在播但因为没解锁没声，这里补一次。 */
+  function rearm(story, fromMs) {
+    unlock();
+    if (!story) return;
+    try { start(story, fromMs || 0); } catch { /* 忽略 */ }
+  }
+
+  window.GlueMusic = { start, stop, unlock, rearm, get playing() { return state.playing; } };
 })();

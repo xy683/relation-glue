@@ -267,6 +267,10 @@
     $('room').classList.add('hidden');
     bindImports();
     bindModes();
+    $('soundBtn')?.addEventListener('click', () => {
+      try { window.GlueMusic && window.GlueMusic.rearm(room.story, 0); } catch (e) { /* 忽略 */ }
+      $('soundBtn')?.classList.add('on');
+    });
     $('photos')?.addEventListener('change', async (event) => {
       const files = [...(event.target.files || [])].slice(0, 8);
       for (const file of files) {
