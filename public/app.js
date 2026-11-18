@@ -341,8 +341,8 @@
       const res = await fetch('/api/agent');
       const body = await res.json().catch(() => ({}));
       const field = $('agentKeyField');
-    if (field) field.classList.remove('hidden');
-      const state = $('agentState');
+      /* 全站用站长的 Key：Key 输入框和模型选择永远不出现 */
+      if (field) field.classList.add('hidden');
       if (state) state.textContent = agentReady
         ? ('已用你自己的 Key（' + (body.model || 'doubao') + '），花的是你自己的 token')
         : '还没填 Key：填了就走豆包，不填就走本地分镜。Key 只存在你的浏览器里。';
