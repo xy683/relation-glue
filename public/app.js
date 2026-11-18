@@ -212,16 +212,17 @@
   /** 智能体模式：没填 Key 时把输入框露出来，填了就去掉。 */
   async function refreshAgent() {
     try {
+      agentReady = Boolean(localStorage.getItem('glue.agentKey'));
       const res = await fetch('/api/agent');
-      const body = await res.json();
-      agentReady = Boolean(body.ready);
-      const field = agentKeyField;
+      const body = await res.json().catch(() => ({}));
+      const field = $('agentKeyField');
       if (field) field.classList.toggle('hidden', !(mode === 'agent' && !agentReady));
-      const state = agentState;
-      if (state) state.textContent = agentReady ? ('已接上豆包（' + body.model + '）') : '还差一个豆包 Key：没有它也可以用，短片会走本地分镜。';
-    } catch { /* 网络不好就先不管 */ }
+      const state = $('agentState');
+      if (state) state.textContent = agentReady
+        ? ('已用你自己的 Key（' + (body.model || 'doubao') + '），花的是你自己的 token')
+        : '还没填 Key：填了就走豆包，不填就走本地分镜。Key 只存在你的浏览器里。';
+    } catch { /* 网络不好先不管 */ }
   }
-
   function bindModes() {
     document.querySelectorAll('.mode').forEach((el) => el.addEventListener('click', () => {
       mode = el.dataset.mode === 'agent' ? 'agent' : 'plain';
@@ -231,13 +232,11 @@
     agentSave?.addEventListener('click', async () => {
       const key = agentKey.value.trim();
       if (!key) return;
-      const res = await fetch('/api/agent/key', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key }) });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) { agentState.textContent = body.error ?? '这串 Key 没存上。'; return; }
+      localStorage.setItem('glue.agentKey', key);
       agentReady = true;
       agentKeyField.classList.add('hidden');
-      $('agentState').textContent = '已接上豆包（' + body.model + '）';
-      toast('豆包已接上');
+      agentState.textContent = '已用你自己的 Key，花的是你自己的 token';
+      toast('Key 已存在这台设备');
     });
   }
 
@@ -285,7 +284,7 @@
       button.disabled = true;
       button.textContent = '正在把故事读成十五秒…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, avatars: [avatars.me, avatars.peer].filter(Boolean) }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, agentKey: localStorage.getItem('glue.agentKey') || '', avatars: [avatars.me, avatars.peer].filter(Boolean) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);
