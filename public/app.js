@@ -187,6 +187,26 @@
 
   let mode = 'plain';
   const avatars = { me: '', peer: '' };
+  const photos = [];
+
+  /** 照片缩到 720px 的竖幅，够快剪用。 */
+  function readPhoto(file) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const w = 720;
+        const h = Math.round((img.height / img.width) * w) || 1280;
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = () => resolve('');
+      img.src = url;
+    });
+  }
 
   /** 头像缩到 320px 的方形，省流量也够画。 */
   function readAvatar(file) {
@@ -247,6 +267,15 @@
     $('room').classList.add('hidden');
     bindImports();
     bindModes();
+    photos?.addEventListener('change', async (event) => {
+      const files = [...(event.target.files || [])].slice(0, 8);
+      for (const file of files) {
+        const src = await readPhoto(file);
+        if (src) photos.push(src);
+      }
+      const state = document.getElementById('photoState');
+      if (state) state.textContent = photos.length ? '已选 ' + photos.length + ' 张' : '';
+    });
     /* 手机上：第一次触摸就把音频解锁，否则整片没声音 */
     document.getElementById('agentModel')?.addEventListener('change', (event) => { localStorage.setItem('glue.agentModel', event.target.value); });
     const unlockOnce = () => { try { window.GlueMusic && window.GlueMusic.unlock(); } catch (e) { /* 忽略 */ } };
@@ -324,7 +353,7 @@
       button.disabled = true;
       button.textContent = '正在把故事读成十五秒…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean) }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);

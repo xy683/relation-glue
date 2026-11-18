@@ -88,6 +88,14 @@
           <option value="regret">遗憾（薛之谦那种）</option>
         </select>
       </div>
+      <div class="field">
+        <label>照片 <small>可选；传几张，短片就用它们做快剪</small></label>
+        <div class="imports">
+          <label class="chip" for="photos">🖼 选择照片</label>
+          <input id="photos" type="file" accept="image/*" multiple hidden>
+          <span class="imp" id="photoState"></span>
+        </div>
+      </div>
       </div>
       <div class="field">
         <label>两个人的头像 <small>可选；传了就用他们的脸来演，不传就是剪影</small></label>

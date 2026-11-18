@@ -274,7 +274,7 @@ const server = createServer(async (req, res) => {
     /* a room from a chat log: the log is read here and never stored whole */
     /* 把一支闪片渲染成 MP4：ffmpeg 在本机合成，几十秒出片 */
     if (path === '/api/render' && req.method === 'POST') {
-      const body = await readBody(req);
+      const body = await readBody(req, 16 * 1024 * 1024);
       const story = body.story;
       if (!story || !Array.isArray(story.acts)) return json(res, 400, { error: '缺了这支片子的分镜。' });
       const seconds = Math.max(15, Math.min(180, (Number(story.duration) || 15000) / 1000));
@@ -303,7 +303,7 @@ const server = createServer(async (req, res) => {
       saveKey(next);
       return json(res, 200, { ready: true, model: MODEL, hint: '' });
     }    if (path === '/api/rooms' && req.method === 'POST') {
-      const body = await readBody(req);
+      const body = await readBody(req, 8 * 1024 * 1024);
       const log = String(body.log ?? '');
       if (log.length < 20) return json(res, 400, { error: '记录太短了，多贴几句吧。' });
       if (log.length > 60_000) return json(res, 400, { error: '记录有点长，先贴最近的一段吧。' });
@@ -324,6 +324,8 @@ const server = createServer(async (req, res) => {
       else if (story.music) story.music.theme = theme;
       /* 两张头像（可选）：客户端已经缩到 320px 的 dataURL，这里只收 image/jpeg 且不超过 200KB */
       const avatars = Array.isArray(body.avatars) ? body.avatars.slice(0, 2) : [];
+      const images = Array.isArray(body.images) ? body.images.slice(0, 8) : [];
+      story.images = images.filter((src) => typeof src === 'string' && src.indexOf('data:image/') === 0 && src.length < 400000).slice(0, 8);
       story.avatars = avatars
         .filter((src) => typeof src === 'string' && src.startsWith('data:image/') && src.length < 200_000)
         .map((src) => src.slice(0, 200_000));
