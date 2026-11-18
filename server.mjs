@@ -374,7 +374,7 @@ const server = createServer(async (req, res) => {
       const acts = Array.isArray(story.acts) ? story.acts.slice(0, 5) : [];
       if (!acts.length) return json(res, 400, { error: '缺少分镜。' });
       const refs = Array.isArray(story.images) ? story.images.filter((s) => typeof s === 'string' && s.startsWith('/qstyle/')).slice(0, 1) : [];
-      const refUrl = refs.length ? ('https://' + String(req.headers.host || 'localhost') + refs[0]) : '';
+      const refUrl = refs.length ? ('http://' + String(req.headers.host || 'localhost') + refs[0]) : '';
       const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
       const outs = [];
       const segments = Math.max(1, Math.min(4, Number(body.segments) || 4));
