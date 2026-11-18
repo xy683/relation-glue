@@ -330,15 +330,19 @@ function photoReady(src) {
   if (!item) { item = new Image(); item.src = src; item.onload = () => { item.ready = true; }; photoCache.set(src, item); }
   return item.ready;
 }
-function drawPhoto(ctx, src, w, h, k) {
+function drawPhoto(ctx, src, w, h, k, pulse) {
   const img = photoCache.get(src);
   if (!img || !img.ready) return false;
-  const scale = 1.04 + k * 0.14;
+  const punch = (pulse || 0) * 0.07;
+  const scale = 1.04 + k * 0.14 + punch;
   const s = Math.max(w / img.width, h / img.height) * scale;
   const dw = img.width * s;
   const dh = img.height * s;
   ctx.save();
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 0.92;
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate((pulse || 0) * 0.008);
+  ctx.translate(-w / 2, -h / 2);
   ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
   ctx.restore();
   const veil = ctx.createLinearGradient(0, 0, 0, h);
@@ -405,7 +409,13 @@ function drawPhoto(ctx, src, w, h, k) {
         idx = Math.min(photoList.length - 1, Math.floor(t / per));
         progress = (t % per) / per;
       }
-      if (photoReady(photoList[idx])) painted = drawPhoto(ctx, photoList[idx], w, h, progress);
+      let pulse = 0;
+      if (cuts.length > 1) {
+        let j = 0;
+        while (j + 1 < cuts.length && cuts[j + 1] <= t) j += 1;
+        pulse = Math.max(0, 1 - (t - cuts[j]) / 260);
+      }
+      if (photoReady(photoList[idx])) painted = drawPhoto(ctx, photoList[idx], w, h, progress, pulse);
     }
     if (!painted) backdrop(ctx, w, h, act, next, blend, t);
 
