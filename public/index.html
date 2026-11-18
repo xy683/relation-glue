@@ -68,7 +68,6 @@
           <input id="photos" type="file" accept="image/*" multiple hidden>
           <span class="imp" id="photoState"></span>
         </div>
-        </div>
       </div>
 
       <div class="row">
@@ -109,7 +108,8 @@
     <div class="stage" id="stage">
       <p class="agent-note" id="agentNote"></p>
       <canvas id="film" width="1080" height="1920" aria-label="三十秒的 Q 版回忆短片"></canvas>
-      <video id="filmVideo" class="film-video hidden" playsinline controls loop></video>
+      <video id="filmVideo" class="film-video hidden" playsinline controls preload="auto"></video>
+      <div class="film-veil hidden" id="filmVeil"><span>🎬 已成片</span><b>等 TA 一起看</b></div>
       <button type="button" class="sound" id="soundBtn">🔊 点一下开声音</button>
       <span class="badge" id="badge">动漫小故事 · 30″</span>
       <span class="film-title" id="filmTitle">初 遇</span>
@@ -123,9 +123,24 @@
       </div>
       <button class="btn" id="copyMain" type="button">复制专属房间链接</button>
         <button class="btn" id="makeFilm" type="button">确认生成视频（点击后才开始）</button>
-        <a class="chip hidden" id="exportFilm" href="#" download="memory-film.mp4">导出 MP4</a>
         <p class="hint" id="filmState"></p>
       <p class="waiting" id="waitingText">把这条链接发给 TA。TA 点开，你们就一起看这三十秒。</p>
+    </div>
+
+    <!-- 成片好了：先别放，等接收人进来（最多等两分钟） -->
+    <div id="view-ready" class="under-film hidden">
+      <div class="ready-card">
+        <span class="ready-tag">🎬 你们的三十秒，已经做好了</span>
+        <h2>先别急着看。</h2>
+        <p id="readyTip">把下面的链接发给 TA。<br>TA 点开进来的那一刻，你们一起从头看。</p>
+      </div>
+      <div class="linkbox">
+        <code id="readyLink">…</code>
+        <button class="btn pill" id="readyCopy" type="button">复制链接</button>
+      </div>
+      <p class="ready-count">还在等 TA 进来 · <b id="readyClock">02:00</b></p>
+      <p class="waiting">两分钟内 TA 还没来，就先自己看；看完再问你们，要不要打开那扇门。</p>
+      <a class="chip hidden" id="exportFilm" href="#" download="memory-film.mp4">导出 MP4</a>
     </div>
 
     <!-- 同步播放中的简短状态 -->
@@ -193,9 +208,10 @@
 </main>
 
 <div class="toast" id="toast" role="status"></div>
+<div id="glueModal" class="glue-modal hidden" aria-live="polite"><div class="glue-card" id="glueCard"></div></div>
 
 <script src="/music.js"></script>
 <script src="/film.js"></script>
 <script src="/app.js"></script>
-  <div id="glueModal" class="glue-modal hidden" aria-live="polite"><div class="glue-card" id="glueCard"></div></div>`n</body>
+</body>
 </html>

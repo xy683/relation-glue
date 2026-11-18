@@ -220,3 +220,16 @@ select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-
 .g-btn[disabled] { opacity: 0.6; }
 .glue-count { margin-top: 14px; font-size: 12px; color: #9a8a7d; }
 .glue-result { font-size: 22px; font-weight: 700; line-height: 1.6; color: #2b2018; }
+
+/* 成片好了、人还没齐：先扣着不放 */
+.film-veil { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; pointer-events: none; background: radial-gradient(120% 80% at 50% 18%, rgba(46, 20, 50, 0.45), rgba(8, 5, 10, 0.9)); }
+.film-veil span { font-size: 11px; letter-spacing: 4px; color: var(--glue); }
+.film-veil b { font-family: var(--serif); font-size: 19px; letter-spacing: 2px; color: #fff3ea; }
+.ready-card { border: 1px solid rgba(181, 140, 255, 0.32); background: linear-gradient(170deg, rgba(58, 28, 51, 0.82), rgba(24, 13, 29, 0.9)); border-radius: 18px; padding: 18px 16px; text-align: center; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); }
+.ready-card .ready-tag { font-size: 11px; letter-spacing: 2px; color: var(--glue); }
+.ready-card h2 { font-family: var(--serif); font-size: 21px; letter-spacing: 1px; margin: 8px 0 10px; }
+.ready-card p { color: var(--ink-soft); font-size: 13px; line-height: 1.9; margin: 0; }
+.ready-count { text-align: center; color: var(--ink-soft); font-size: 12px; letter-spacing: 1px; }
+.ready-count b { color: var(--coral); font-size: 17px; font-variant-numeric: tabular-nums; margin-left: 6px; }
+/* 成片好了这一屏：把舞台收矮，好让「复制链接」一眼就看见 */
+.stage.compact { max-height: min(38dvh, 340px); }

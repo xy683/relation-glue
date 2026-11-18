@@ -13,7 +13,7 @@
   const CACHE = 'glue.rooms';
 
   /** @type {any} */
-  let room = { id: '', role: 'guest', token: '', state: null, offset: 0, sse: null, joined: false, raf: 0, tick: 0, seen: new Set(), tipTimer: 0, tipAt: 0, view: '' };
+  let room = { id: '', role: 'guest', token: '', state: null, offset: 0, sse: null, joined: false, raf: 0, tick: 0, readyTick: 0, seen: new Set(), tipTimer: 0, tipAt: 0, view: '', story: null, filmSrc: '', lastFilmStart: null };
 
   /* ── 小工具 ───────────────────────────────────────── */
   function toast(text) {
@@ -378,11 +378,19 @@
     });
 
     $('soundBtn')?.addEventListener('click', () => {
-      const story = room.story;
-      let ok = false;
-      try { ok = window.GlueMusic ? window.GlueMusic.rearm(story, 0) : false; } catch (e) { ok = false; }
-      if (bgm) { try { bgm.play(); ok = true; } catch (e) { /* 忽略 */ } }
+      const video = $('filmVideo');
       const btn = $('soundBtn');
+      /* 成片自带配乐：直接开视频的声音 */
+      if (video && room.filmSrc) {
+        video.muted = !video.muted;
+        if (!video.muted) video.play().catch(() => {});
+        if (btn) btn.textContent = video.muted ? '🔇 点一下开声音' : '🔊 声音已开';
+        if (!video.muted) setTimeout(() => { if (btn) btn.classList.add('on'); }, 1200);
+        return;
+      }
+      let ok = false;
+      try { ok = window.GlueMusic ? window.GlueMusic.rearm(room.story, 0) : false; } catch (e) { ok = false; }
+      if (bgm) { try { bgm.play(); ok = true; } catch (e) { /* 忽略 */ } }
       if (btn) btn.textContent = ok === false ? '🔇 浏览器拦了声音，点一次视频' : '🔊 声音已开';
       setTimeout(() => { const b = $('soundBtn'); if (b) b.classList.add('on'); }, 1200);
     });
@@ -507,6 +515,7 @@
     $('linkText').textContent = link;
     $('copyLink').addEventListener('click', () => copy(link).then(() => toast('链接已复制')));
     $('copyMain').addEventListener('click', () => copy(link).then(() => toast('专属链接已复制，发给 TA 吧')));
+    $('readyCopy').addEventListener('click', () => copy(link).then(() => toast('链接已复制，发给 TA 吧')));
 
 
     try {
@@ -611,37 +620,45 @@
   }
   function apply(state) {
     if (!state) return;
-    /* 房间里已经有成片地址：两个人看同一支视频 */
-    if (state.filmUrl) filmDone(state.filmUrl);
+    room.offset = state.serverNow - Date.now();
+    if (state.story) room.story = state.story;
+    /* 成片地址一出现：先装好画面，不自动播放 —— 等接收人进来，或者等满两分钟 */
+    if (state.filmUrl) loadFilm(state.filmUrl);
     renderGlue(state);
     const wasChat = room.state?.status === 'chat';
     room.state = state;
-    room.offset = state.serverNow - Date.now();
     $('names').innerHTML = `<i>${escape0(state.names.me)}</i> &nbsp;·&nbsp; <u>${escape0(state.names.partner)}</u>`;
 
     if (state.status === 'waiting') {
       $('presence').textContent = state.joined.host && state.joined.guest ? '' : '等 TA 进来';
       show('waiting');
-      preview(state.story);
+      if (!state.filmUrl) preview(state.story);
+    } else if (state.status === 'ready') {
+      /* 成片好了：先扣着不放，亮出链接和两分钟倒计时 */
+      show('ready');
+      stopFilm();
+      pauseFilm();
+      updateReady(state);
     } else if (state.status === 'film') {
       show('film');
-      /* 每次新的观影窗口：两支手机都从头播同一支视频 */
+      /* 每次新的观影窗口：两边都从头播同一支视频 */
       if (room.lastFilmStart !== state.filmStart) {
         room.lastFilmStart = state.filmStart;
-        const v = $('filmVideo');
-        if (v && state.filmUrl) { try { v.currentTime = 0; v.play().catch(() => {}); } catch (e) { /* 忽略 */ } }
-        try { if (window.GlueMusic) window.GlueMusic.rearm(state.story, 0); } catch (e) { /* 忽略 */ }
+        void playFilm(state);
       }
-      play(state);
     } else if (state.status === 'confirm') {
+      clearInterval(room.readyTick);
+      pauseFilm();
       stopFilm();
       show('confirm');
       updateConfirm(state);
     } else if (state.status === 'declined') {
+      pauseFilm();
       stopFilm();
       show('declined');
       if (room.sse) room.sse.close();
     } else if (state.status === 'chat') {
+      pauseFilm();
       stopFilm();
       show('chat');
       if (!wasChat) { room.seen.clear(); $('messages').querySelectorAll('.msg').forEach((n) => n.remove()); }
@@ -649,6 +666,7 @@
       startClock(state);
       $('input').focus({ preventScroll: true });
     } else if (state.status === 'ended') {
+      pauseFilm();
       stopFilm();
       show('ended');
       if (room.sse) { room.sse.close(); room.sse = null; }
@@ -657,9 +675,17 @@
 
   function show(view) {
     room.view = view;
-    for (const name of ['waiting', 'film', 'confirm', 'declined', 'chat', 'ended']) {
+    for (const name of ['waiting', 'ready', 'film', 'confirm', 'declined', 'chat', 'ended']) {
       $(`view-${name}`).classList.toggle('hidden', name !== view);
     }
+    const veil = $('filmVeil');
+    if (veil) veil.classList.toggle('hidden', view !== 'ready');
+    const stage = $('stage');
+    if (stage) stage.classList.toggle('compact', view === 'ready');
+    const video = $('filmVideo');
+    if (video) video.controls = view === 'film';
+    const sb = $('soundBtn');
+    if (sb) sb.classList.toggle('hidden', view === 'ready');
     $('stage').classList.toggle('hidden', view === 'chat' || view === 'declined' || view === 'ended' || view === 'confirm');
     $('presence').classList.toggle('hidden', view !== 'waiting');
   }
@@ -672,26 +698,74 @@
     if (window.GlueMusic) window.GlueMusic.stop();
   }
 
-  /* 成片自动出：普通模式走本地 ffmpeg；智能体模式先试 AI 动画，失败自动退回本地 */
-  let filmStarted = false;
+  /* 成片只装不播：等接收人进来（或等满两分钟）再开演 */
   let lastLog = '';
   let lastMe = '';
   let lastPartner = '';
-  function filmDone(url) {
-    const st = $('filmState');
-    if (st) st.textContent = '成片好了，正在播放';
+
+  function loadFilm(url) {
     const video = $('filmVideo');
     const canvas = $('film');
-    if (video) {
+    if (!video || !url) return;
+    if (room.filmSrc !== url) {
+      room.filmSrc = url;
       video.src = url;
-      if (video.getAttribute('src') === url) return;
-      video.classList.remove('hidden');
-      video.play().catch(() => {});
+      try { video.load(); } catch (e) { /* 忽略 */ }
     }
+    video.classList.remove('hidden');
     if (canvas) canvas.classList.add('hidden');
-    const exp = exportFilm;
+    const exp = $('exportFilm');
     if (exp) { exp.href = url; exp.classList.remove('hidden'); }
+  }
+
+  /** 成片已经在了：停住、回到第一帧，绝不自己播 */
+  function pauseFilm() {
+    const video = $('filmVideo');
+    if (!video) return;
+    try { video.pause(); } catch (e) { /* 忽略 */ }
+    try { if (video.currentTime > 0.05) video.currentTime = 0; } catch (e) { /* 忽略 */ }
+  }
+
+  /** 一起看：t 由房间里同一个开始时刻算出来，晚进来的人也能接上 */
+  async function playFilm(state) {
+    const video = $('filmVideo');
+    if (!video || !state.filmUrl) return;
     stopFilm();
+    clearInterval(room.readyTick);
+    loadFilm(state.filmUrl);
+    const from = Math.max(0, ((Date.now() + room.offset) - state.filmStart) / 1000);
+    const seek = () => { try { video.currentTime = from; } catch (e) { /* 忽略 */ } };
+    if (video.readyState >= 1) seek();
+    else video.addEventListener('loadedmetadata', seek, { once: true });
+    video.muted = false;
+    try {
+      await video.play();
+    } catch (e) {
+      /* 浏览器不让带声音自动播：先静音播，按钮在，一点就开声音 */
+      video.muted = true;
+      try { await video.play(); } catch (e2) { /* 忽略 */ }
+      const btn = $('soundBtn');
+      if (btn) { btn.textContent = '🔇 点一下开声音'; btn.classList.remove('on'); }
+    }
+  }
+
+  function updateReady(state) {
+    const link = `${location.origin}/r/${room.id}`;
+    const code = $('readyLink');
+    if (code) code.textContent = link;
+    clearInterval(room.readyTick);
+    const tick = () => {
+      const left = Math.max(0, Math.ceil(((state.readyDeadline || 0) - (Date.now() + room.offset)) / 1000));
+      const clock = $('readyClock');
+      if (clock) clock.textContent = `${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`;
+      if (left <= 0) {
+        clearInterval(room.readyTick);
+        const tip = $('readyTip');
+        if (tip) tip.textContent = '时间到了，先自己看。看完再问你们，要不要打开那扇门。';
+      }
+    };
+    tick();
+    room.readyTick = setInterval(tick, 500);
   }
   async function confirmFilm() {
     if (room.role !== 'host') { toast('只有发起链接的人可以生成视频。'); return; }
@@ -725,7 +799,11 @@
         if (!s) continue;
         if (s.phase === 'segments') say('正在生成第 ' + s.step + '/' + s.total + ' 段视频…');
         else if (s.phase === 'concat') say('正在拼接完整回忆短片…');
-        if (s.status === 'done') { filmDone(s.url); return; }
+        if (s.status === 'done') {
+          say('成片好了，先别放，等 TA 进来');
+          try { apply(await (await fetch(`/api/rooms/${room.id}/state`)).json()); } catch (e) { /* SSE 也会送来 */ }
+          return;
+        }
         if (s.status === 'error') throw new Error(s.error);
       }
       throw new Error('生成超时了，稍后再试。');
@@ -742,49 +820,30 @@
     if (el && el.id === 'makeFilm') { event.preventDefault(); void confirmFilm(); }
   });
 
-  /** 等待的时候，房主先看一支循环的预告；另一个人进来就换成同步的正式播放。 */
+  /** 还没开始的时候，先看一支循环的预告；成片好了就换成等 TA 的卡片 */
   function preview(story) {
     /* 已经在循环里就别重启，否则每来一次房间事件就闪一下 */
     if (room.raf) return;
+    if (!story) return;
     room.story = story;
-    if (story && story.musicUrl) startBgm(story.musicUrl);
     stopFilm();
+    if (story.musicUrl) startBgm(story.musicUrl);
     const canvas = $('film');
+    const video = $('filmVideo');
+    if (video) { try { video.pause(); } catch (e) { /* 忽略 */ } video.classList.add('hidden'); }
+    if (canvas) canvas.classList.remove('hidden');
     const started = performance.now();
     const loop = () => {
       const total = film.durationOf ? film.durationOf(story) : DURATION;
       const t = (performance.now() - started) % total;
-      film.draw(canvas, quiet, t);
+      film.draw(canvas, story, t);
       const note = document.getElementById('agentNote');
-      if (note) note.textContent = story && story.agentNote ? story.agentNote : '';
+      if (note) note.textContent = story && story.agentNote && !/没填 ?Key/i.test(story.agentNote) ? story.agentNote : '';
       if (window.GlueMusic && !window.GlueMusic.playing) window.GlueMusic.start(story, t);
       $('filmTitle').textContent = film.titleOf(Math.floor(t / (total / 5)));
       room.raf = requestAnimationFrame(loop);
     };
     loop();
-  }
-
-  /** 两边同步：t 由房间给的开始时刻算出来，不是各自点播放的时间。 */
-  function play(state) {
-    if (state.story && state.story.musicUrl) startBgm(state.story.musicUrl);
-    stopFilm();
-    const canvas = $('film');
-    const total = film.durationOf ? film.durationOf(state.story) : DURATION;
-    const from = state.filmStart - (Date.now() + room.offset);
-    const startAt = performance.now() + Math.max(0, from);
-    if (window.GlueMusic) window.GlueMusic.start(state.story, Math.max(0, from));
-    const tick = () => {
-      const t = performance.now() - startAt;
-      if (t >= total) {
-        film.draw(canvas, state.story, total - 1);
-        room.raf = 0;
-        return;
-      }
-      film.draw(canvas, state.story, Math.max(0, t));
-      $('filmTitle').textContent = film.titleOf(Math.max(0, Math.floor(t / (total / 5))));
-      room.raf = requestAnimationFrame(tick);
-    };
-    tick();
   }
 
   /* ── 确认 ─────────────────────────────────────────── */

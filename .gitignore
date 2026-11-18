@@ -5,3 +5,7 @@ tools/*.log
 公网地址.txt
 data/
 *.zip
+owner-key.txt
+.glue-e2e.mjs
+.shot.mjs
+outputs/*.png

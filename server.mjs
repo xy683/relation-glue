@@ -12,7 +12,7 @@
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { networkInterfaces, tmpdir } from 'node:os';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,7 +31,7 @@ const CHAT_MS = Number(process.env.GLUE_CHAT_MS || 20 * 60_000);
 const ROOM_TTL = 2 * 60 * 60_000;
 const LEAD_MS = 1500;
 
-/** @typedef {{ id: string, hostToken: string, createdAt: number, names: { me: string, partner: string }, story: any, status: 'waiting'|'film'|'confirm'|'declined'|'chat'|'ended', joined: { host: boolean, guest: boolean }, confirm: { host: boolean|null, guest: boolean|null }, filmStart: number|null, chatEnd: number|null, messages: Array<{ id: string, from: 'host'|'guest', name: string, text: string, at: number }>, sse: Set<any>, timers: NodeJS.Timeout[] }} Room */
+/** @typedef {{ id: string, hostToken: string, createdAt: number, names: { me: string, partner: string }, story: any, status: 'waiting'|'ready'|'film'|'confirm'|'declined'|'chat'|'ended', joined: { host: boolean, guest: boolean }, confirm: { host: boolean|null, guest: boolean|null }, filmStart: number|null, readyDeadline?: number, chatEnd: number|null, messages: Array<{ id: string, from: 'host'|'guest', name: string, text: string, at: number }>, sse: Set<any>, timers: NodeJS.Timeout[] }} Room */
 
 /** Every room, by its link's id. */
 /* ── 聊天记录 → 回忆脚本 ───────────────────────────────── */
@@ -176,14 +176,14 @@ const OWNER_KEY = (() => {
 
 /* 参考样片里提炼出来的风格（只复刻风格，不复刻剧情/人物） */
 const STYLE = [
-  '日系 2D 动画赛璐璐风格的 Q 版小人：大头、大眼睛、小身体，两到三头身，圆润可爱，干净线条，柔和高光。',
-  '两个 Q 版角色始终在画面里，中景，能看清脸和动作。',
-  '两个人要互动：并肩走、对视、递东西、吃东西、坐着聊天，不要空镜、不要只拍风景。',
-  '背景是真实风景的动画化：公园、街道、海边，斑驳阳光、树影光斑、浅景深虚化。',
-  '暖色调（米金、暖橙、浅绿），明亮通透，轻微胶片颗粒。',
-  '镜头缓慢推近或轻微横移，稳定不抖，电影感构图。',
+  '日系 2D 动画电影质感，赛璐璐上色，Q 版小人（约 2.5 头身）：大头、大眼、小身体，圆润可爱，线条干净，柔和高光。',
+  '同一部短片里的连续镜头：同一对角色（男生黑发、女生长发，长相与服装以人物参考图为准），前后完全一致。',
+  '两个角色始终同框、有互动：对视、并肩走、递东西、一起坐着、一起笑；不要空镜、不要只拍风景、不要火柴人。',
+  '背景是真实场景的动画化：公园、街道、海边、老房子、夜里的窗前，斑驳阳光、树影光斑、浅景深虚化。',
+  '暖色调（米金、暖橙、浅绿），明亮通透，轻微胶片颗粒，电影感构图，画面干净。',
+  '镜头稳定，缓慢推近或轻微横移，不要快速摇镜、不要甩镜。',
 ].join('');
-const NEGATIVE = '避免出现：人脸扭曲、肢体畸形、画面闪烁、抖动、崩坏、模糊、变形、Q版形象失效、物体穿模、五官错乱、多手多脚、文字乱码。';
+const NEGATIVE = '避免出现：人脸扭曲、五官错乱、肢体畸形、多手多脚、物体穿模、画面闪烁、抖动、模糊、崩坏、画风突变、真人照片感，以及任何文字、字幕、对话框、logo、水印。';
 /* 防刷：同一个 IP 每天最多 5 次，且两次之间至少隔 30 分钟 */
 const filmQuota = new Map();
 const rooms = new Map();
@@ -216,6 +216,42 @@ async function ensureDefaultCouple(key) {
   writeFileSync(file, Buffer.from(await bin.arrayBuffer()));
   return rel;
 }
+/* 中文字幕字体：Windows 用微软雅黑；Linux 用 fc-list 找思源/Noto；找不到就不烧字幕（宁可不加字，也不加一堆方块） */
+function filmFont() {
+  if (process.platform === 'win32') return existsSync('C:/Windows/Fonts/msyh.ttc') ? 'Microsoft YaHei' : '';
+  try {
+    const out = execFileSync('fc-list', [':lang=zh', 'family'], { encoding: 'utf8', timeout: 8000 });
+    const fams = out.split('\n').map((s) => s.split(',')[0].trim()).filter(Boolean);
+    return fams.find((f) => /Noto Sans CJK|Source Han|WenQuanYi|Droid Sans Fallback/i.test(f)) || fams[0] || '';
+  } catch { return ''; }
+}
+const assClock = (sec) => {
+  const s = Math.max(0, sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rest = (s % 60).toFixed(2).padStart(5, '0');
+  return h + ':' + String(m).padStart(2, '0') + ':' + rest;
+};
+const assText = (text, max) => String(text || '').replace(/[\r\n]+/g, ' ').replace(/[{}]/g, '').replace(/\\/g, '').trim().slice(0, max);
+/** 故事里的句子 → 字幕：每镜一句，淡入淡出，压在下三分之一。 */
+function filmAss(segs, segDur, fade, font) {
+  const head = [
+    '[Script Info]', 'ScriptType: v4.00+', 'PlayResX: 1080', 'PlayResY: 1920', 'WrapStyle: 2', '',
+    '[V4+ Styles]',
+    'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+    'Style: Sub,' + font + ',54,&H00FFFFFF,&H00FFFFFF,&H00100814,&H64000000,1,0,0,0,100,100,1,0,1,0,0,2,110,110,300,1',
+    '', '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
+  ];
+  const events = [];
+  segs.forEach((seg, i) => {
+    const line = assText(seg.subtitle || seg.excerpt || '', 26);
+    if (!line) return;
+    const at = i * (segDur - fade);
+    events.push('Dialogue: 0,' + assClock(at + 1.1) + ',' + assClock(at + segDur - 0.9) + ',Sub,,0,0,0,,{\\fad(420,420)}' + line);
+  });
+  return head.concat(events).join('\n');
+}
+
 async function runFilmJob(id, opts) {
   const job = filmJobs.get(id);
   const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
@@ -224,20 +260,30 @@ async function runFilmJob(id, opts) {
     const segs = Array.isArray(opts.script.segments) ? opts.script.segments.slice(0, 3) : [];
     if (!segs.length) throw new Error('脚本里没有分镜。');
     job.total = segs.length;
-    const toUrl = (s) => 'http://' + opts.host + s;
-    const charRefs = (Array.isArray(opts.avatars) ? opts.avatars : [])
-      .filter((s) => typeof s === 'string' && s.startsWith('/qstyle/'))
-      .slice(0, 2)
-      .map(toUrl);
-    const bgRefs = (Array.isArray(opts.images) ? opts.images : [])
-      .filter((s) => typeof s === 'string' && s.startsWith('/qstyle/'))
-      .slice(0, 1)
-      .map(toUrl);
+    /* 参考图缩到 768 宽、内联成 data URL：不依赖「豆包能不能访问到这台机器」，本地、内网、公网都一样 */
+    const toRef = (s) => {
+      if (typeof s !== 'string') return '';
+      if (s.startsWith('data:image/')) return s;
+      if (!s.startsWith('/qstyle/')) return '';
+      const file = join(HERE, 'public', s.replace(/^\//, ''));
+      if (!existsSync(file)) return '';
+      try {
+        const small = join(dir, 'ref-' + randomBytes(4).toString('hex') + '.jpg');
+        execFileSync(ffmpeg, ['-y', '-v', 'error', '-i', file, '-vf', 'scale=768:-2', '-q:v', '4', small], { timeout: 20000, stdio: 'ignore' });
+        if (existsSync(small)) return 'data:image/jpeg;base64,' + readFileSync(small).toString('base64');
+      } catch { /* 转不了就用原图 */ }
+      const ext = /\.(png|jpe?g|webp)$/i.exec(file)?.[1]?.toLowerCase() || 'png';
+      const mime = ext === 'jpg' ? 'jpeg' : ext;
+      return 'data:image/' + mime + ';base64,' + readFileSync(file).toString('base64');
+    };
+    const charRefs = (Array.isArray(opts.avatars) ? opts.avatars : []).map(toRef).filter(Boolean).slice(0, 2);
+    const bgRefs = (Array.isArray(opts.images) ? opts.images : []).map(toRef).filter(Boolean).slice(0, 1);
     const outs = [];
     if (!charRefs.length) {
       try {
         const d = await ensureDefaultCouple(opts.key);
-        if (d) charRefs.push('http://' + opts.host + d);
+        const u = d ? toRef(d) : '';
+        if (u) charRefs.push(u);
       } catch { /* 没有默认图就只靠文字描述 */ }
     }
     const genOnce = async (i) => {
@@ -246,28 +292,32 @@ async function runFilmJob(id, opts) {
       seg.refs = charRefs.concat(bgRefs);
       const prompt = [
         STYLE,
-        opts.storyText ? '故事原文（请按这个画）：' + String(opts.storyText).slice(0, 140) : '',
-        '这一镜：' + (seg.scene || '') + '；镜头' + (seg.shot || '缓慢推近') + '；情绪' + (seg.emotion || '温柔') + '。',
-        '必须出现两个人（一男一女，形象以人物参考图为准），在画面里做动作、有眼神交流；不要空镜、不要只拍风景、不要火柴人或圆球。',
-        seg.excerpt ? '这一镜讲的是：' + seg.excerpt.slice(0, 60) : '',
-        (seg.refs && seg.refs.length > 1) ? '背景使用风景参考图，做成同风格动画背景。' : '',
-        seg.subtitle ? '字幕只出现这一句：' + seg.subtitle : '',
+        '第 ' + (i + 1) + '/' + segs.length + ' 镜，和上一镜是同一部短片里的连续画面：同一对角色、同一身衣服。',
+        opts.script && opts.script.characters ? '角色：' + String(opts.script.characters).slice(0, 40) : '',
+        seg.excerpt ? '这一镜发生的事：' + String(seg.excerpt).slice(0, 90) : '',
+        '场景：' + (seg.scene || '有光的地方') + '；镜头：' + (seg.shot || '缓慢推近') + '；情绪：' + (seg.emotion || '温柔') + '。',
+        '只画这一镜的事，画面里不要出现任何文字、字幕、对话框、logo、水印。',
         NEGATIVE,
       ].filter(Boolean).join('\n');
       const content = [{ type: 'text', text: prompt }];
       (seg.refs || []).slice(0, 2).forEach((ref) => { if (ref) content.push({ type: 'image_url', image_url: { url: ref }, role: 'reference_image' }); });
-      const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
-        body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: 10, resolution: '480p' }),
-      });
-      const raw = await created.text();
-      if (!created.ok) {
-        let msg = raw.slice(0, 200);
-        try { const j = JSON.parse(raw); msg = j.error?.message || msg; } catch { /* 忽略 */ }
+      const make = async (resolution) => {
+        const r = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
+          body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: 10, ...(resolution ? { resolution } : {}) }),
+        });
+        return { ok: r.ok, raw: await r.text() };
+      };
+      /* 720p 更清楚；这个模型万一不认 720p，就退回 480p，不让整支片子失败 */
+      let made = await make('720p');
+      if (!made.ok) made = await make('480p');
+      if (!made.ok) {
+        let msg = made.raw.slice(0, 200);
+        try { const j = JSON.parse(made.raw); msg = j.error?.message || msg; } catch { /* 忽略 */ }
         throw new Error('第 ' + (i + 1) + ' 段：' + msg);
       }
-      const taskId = JSON.parse(raw).id;
+      const taskId = JSON.parse(made.raw).id;
       let videoUrl = '';
       for (let k = 0; k < 120; k += 1) {
         await new Promise((ok) => setTimeout(ok, 3000));
@@ -295,19 +345,55 @@ async function runFilmJob(id, opts) {
     const outDir = join(HERE, 'outputs');
     mkdirSync(outDir, { recursive: true });
     const outFile = join(outDir, id + '.mp4');
-    const list = join(dir, 'list.txt');
-    writeFileSync(list, outs.map((f) => "file '" + f.replace(/'/g, "'\\''") + "'").join('\n'));
     const bgm = opts.musicUrl ? join(HERE, 'public', opts.musicUrl.replace(/^\//, '')) : '';
-    const args = ['-y', '-f', 'concat', '-safe', '0', '-i', list];
-    if (bgm && existsSync(bgm)) args.push('-i', bgm);
-    args.push('-vf', 'fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1');
-    if (bgm && existsSync(bgm)) args.push('-map', '0:v', '-map', '1:a', '-shortest', '-c:a', 'aac', '-b:a', '160k');
-    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
-    const okRun = await new Promise((ok) => {
-      const child = spawn(ffmpeg, args, { stdio: 'ignore' });
+    const hasBgm = Boolean(bgm && existsSync(bgm));
+    const runFfmpeg = (args) => new Promise((ok) => {
+      const child = spawn(ffmpeg, args, { cwd: dir, stdio: 'ignore' });
       child.on('exit', (code) => ok(code === 0));
       child.on('error', () => ok(false));
     });
+
+    /* 三镜之间 0.5 秒交叉溶解 + 首尾淡入淡出；故事里的句子由本机烧成字幕，不让模型自己写字（它一定写乱） */
+    const segDur = 10;
+    const fade = 0.5;
+    const total = Math.max(1, outs.length) * segDur - (Math.max(1, outs.length) - 1) * fade;
+    const font = filmFont();
+    if (font) writeFileSync(join(dir, 'subs.ass'), filmAss(segs, segDur, fade, font), 'utf8');
+
+    const graph = [];
+    const xargs = ['-y'];
+    outs.forEach((f, k) => {
+      xargs.push('-i', f);
+      graph.push('[' + k + ':v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,format=yuv420p[v' + k + ']');
+    });
+    if (hasBgm) xargs.push('-i', bgm);
+    let vout = 'v0';
+    for (let k = 1; k < outs.length; k += 1) {
+      graph.push('[' + vout + '][v' + k + ']xfade=transition=fade:duration=' + fade + ':offset=' + (k * (segDur - fade)).toFixed(2) + '[x' + k + ']');
+      vout = 'x' + k;
+    }
+    const tail = ['fade=t=in:st=0:d=0.6', 'fade=t=out:st=' + Math.max(0, total - 0.8).toFixed(2) + ':d=0.8'];
+    if (font) tail.push('subtitles=subs.ass');
+    graph.push('[' + vout + ']' + tail.join(',') + '[vo]');
+    if (hasBgm) graph.push('[' + outs.length + ':a]apad[a]');
+    xargs.push('-filter_complex', graph.join(';'), '-map', '[vo]');
+    if (hasBgm) xargs.push('-map', '[a]', '-shortest', '-c:a', 'aac', '-b:a', '192k');
+    xargs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
+    let okRun = await runFfmpeg(xargs);
+
+    if (!okRun) {
+      /* 万一某一段长度不是 10 秒、交叉溶解对不上：退回硬切拼接，保证片子出得来 */
+      const list = join(dir, 'list.txt');
+      writeFileSync(list, outs.map((f) => "file '" + f.replace(/'/g, "'\\''") + "'").join('\n'));
+      const sargs = ['-y', '-f', 'concat', '-safe', '0', '-i', list];
+      if (hasBgm) sargs.push('-i', bgm);
+      let vf = 'fps=30,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1';
+      if (font) vf += ',subtitles=subs.ass';
+      sargs.push('-vf', vf);
+      if (hasBgm) sargs.push('-map', '0:v', '-map', '1:a', '-af', 'apad', '-shortest', '-c:a', 'aac', '-b:a', '192k');
+      sargs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
+      okRun = await runFfmpeg(sargs);
+    }
     if (!okRun) throw new Error('拼接失败。');
     job.phase = 'done';
     job.status = 'done';
@@ -316,13 +402,9 @@ async function runFilmJob(id, opts) {
       const room = rooms.get(opts.roomId);
       if (room && room.status !== 'chat' && room.status !== 'ended') {
         room.filmUrl = job.url;
-        clearTimers(room);
-        room.status = 'film';
-        room.filmStart = Date.now();
-        room.timers.push(setTimeout(() => {
-          if (room.status === 'film') { room.status = 'confirm'; tell(room); }
-        }, 30_500));
-        tell(room);
+        /* 成片好了先不播：TA 已经在房里就直接开始，否则等 TA 进来（最多两分钟） */
+        if (room.joined.guest) startFilmWindow(room, 'both');
+        else readyFilm(room);
       }
     }
   } catch (e) {
@@ -384,6 +466,8 @@ function publicState(room, now = Date.now()) {
     joined: room.joined,
     confirm: room.confirm,
     filmStart: room.filmStart,
+    readyDeadline: room.readyDeadline || 0,
+    filmReason: room.filmReason || '',
     chatEnd: room.chatEnd,
     offerDeadline: room.offerDeadline || 0,
     askDeadline: room.askDeadline || 0,
@@ -406,10 +490,35 @@ function clearTimers(room) {
   for (const timer of room.timers.splice(0)) clearTimeout(timer);
 }
 
-/** The film once both are in: a moment's lead, then 15 seconds counted by both pages on the same clock. */
-function startFilm(room) {
-  /* 不再自动开始：等成片生成好（filmUrl 广播）才进入同步观影 */
-  if (room.status !== 'waiting') return;
+/** 成片好了、人还没齐：先把片子扣在手里，两分钟内等接收人进来 */
+const FILM_GRACE_MS = 2 * 60_000;
+/** 一支 30 秒的片子，多给一点缓冲时间，放完就弹确认面板 */
+const FILM_WINDOW_MS = 31_500;
+
+function readyFilm(room) {
+  clearTimers(room);
+  room.status = 'ready';
+  room.filmStart = null;
+  room.readyAt = Date.now();
+  room.readyDeadline = room.readyAt + FILM_GRACE_MS;
+  room.timers.push(setTimeout(() => {
+    /* 两分钟到了还没人来：不等了，先自己看完 */
+    if (room.status === 'ready') startFilmWindow(room, 'timeout');
+  }, FILM_GRACE_MS + 200));
+  tell(room);
+}
+
+/** 两个人一起从头看：filmStart 是两边共用的同一个开始时刻 */
+function startFilmWindow(room, reason = 'guest') {
+  if (!room || room.status === 'chat' || room.status === 'ended') return;
+  clearTimers(room);
+  room.status = 'film';
+  room.filmStart = Date.now();
+  room.filmReason = reason;
+  room.readyDeadline = 0;
+  room.timers.push(setTimeout(() => {
+    if (room.status === 'film') { room.status = 'confirm'; tell(room); }
+  }, FILM_WINDOW_MS));
   tell(room);
 }
 function startChat(room) {
@@ -915,17 +1024,15 @@ const server = createServer(async (req, res) => {
         if (!role) return json(res, 403, { error: '这扇门不为这个身份打开。' });
         if (role === 'guest' && room.joined.host === false && room.joined.guest === true) return json(res, 409, { error: '这间房已经有两个人了。' });
         room.joined[role] = true;
-        /* 如果有人晚进来，而成片已经生成：重新开 30 秒同步观影窗口 */
-        if (room.filmUrl && (room.status === 'waiting' || room.status === 'confirm')) {
-          clearTimers(room);
-          room.status = 'film';
-          room.filmStart = Date.now();
-          room.timers.push(setTimeout(() => {
-            if (room.status === 'film') { room.status = 'confirm'; tell(room); }
-          }, 30_500));
+        /* 接收人进来 = 可以开演了；晚到就从头再来一遍，两个人都看全 */
+        if (role === 'guest' && room.filmUrl && (room.status === 'ready' || room.status === 'film' || room.status === 'confirm')) {
+          room.confirm = { host: null, guest: null };
+          startFilmWindow(room, 'guest');
+        } else if (room.status === 'waiting' && room.joined.host && room.joined.guest) {
+          tell(room);
+        } else {
+          tell(room);
         }
-        if (room.joined.host && room.joined.guest && room.status === 'waiting') startFilm(room);
-        else tell(room);
         return json(res, 200, { ok: true, role, state: publicState(room) });
       }
 
