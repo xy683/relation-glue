@@ -221,7 +221,7 @@ async function runFilmJob(id, opts) {
   const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
   const ffmpeg = process.platform === 'win32' ? 'C:/Users/Administrator/Doubao/tools/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
   try {
-    const segs = Array.isArray(opts.script.segments) ? opts.script.segments.slice(0, 6) : [];
+    const segs = Array.isArray(opts.script.segments) ? opts.script.segments.slice(0, 3) : [];
     if (!segs.length) throw new Error('脚本里没有分镜。');
     job.total = segs.length;
     const toUrl = (s) => 'http://' + opts.host + s;
@@ -705,7 +705,7 @@ const server = createServer(async (req, res) => {
       const quotaAt = now;
       const id = randomBytes(6).toString('hex');
       const host = String(req.headers.host || 'localhost');
-      filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 6, url: '', error: '', at: Date.now() });
+      filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 3, url: '', error: '', at: Date.now() });
       void runFilmJob(id, { key, script: body.script || {}, storyText: String(body.storyText ?? ''), musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host, roomId: String(body.roomId ?? ''), ip: quotaIp, at: quotaAt });
       return json(res, 200, { id });
     }
