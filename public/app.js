@@ -716,7 +716,7 @@
       }
       throw new Error('生成超时了，稍后再试。');
     } catch (e) {
-      say('生成失败：' + (e instanceof Error ? e.message : '未知'));
+      say('生成失败：' + (e instanceof Error ? e.message : '未知') + '（可以马上点「确认生成视频」重试，不算次数）');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = '确认生成视频'; }
     }

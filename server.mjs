@@ -128,7 +128,7 @@ function buildScriptFromStory(text, me, partner) {
     const half = Math.ceil(p.length / 2);
     parts.splice(idx, 1, p.slice(0, half), p.slice(half));
   }
-  const segCount = parts.length >= 6 ? 6 : 3;
+  const segCount = 3;
   const shots = ['缓慢推近', '轻轻横移', '慢慢拉远', '贴近细节', '缓缓升起', '停住不动'];
   const conflict = /(分开|分手|吵架|冷战|离开|走散|误会|闹掰|不理|失望)/;
   const sweet = /(遇见|第一次|一起|温柔|开心|喜欢|爱|照顾|等我|陪伴|旅行|海|风)/;
@@ -240,7 +240,7 @@ async function runFilmJob(id, opts) {
         if (d) charRefs.push('http://' + opts.host + d);
       } catch { /* 没有默认图就只靠文字描述 */ }
     }
-    const genOne = async (i) => {
+    const genOnce = async (i) => {
       job.phase = 'segments';
       const seg = segs[i];
       seg.refs = charRefs.concat(bgRefs);
@@ -259,7 +259,7 @@ async function runFilmJob(id, opts) {
       const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
-        body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: segs.length >= 6 ? 5 : 10, resolution: '480p' }),
+        body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: 10, resolution: '480p' }),
       });
       const raw = await created.text();
       if (!created.ok) {
@@ -281,6 +281,14 @@ async function runFilmJob(id, opts) {
       writeFileSync(join(dir, i + '.mp4'), Buffer.from(await bin.arrayBuffer()));
       outs[i] = join(dir, i + '.mp4');
       job.step = outs.filter(Boolean).length;
+    };
+    const genOne = async (i) => {
+      for (let a = 0; a < 2; a += 1) {
+        try { await genOnce(i); return; } catch (e) {
+          if (a === 1) throw e;
+          await new Promise((ok) => setTimeout(ok, 4000));
+        }
+      }
     };
     await Promise.all(segs.map((_, i) => genOne(i)));
     job.phase = 'concat';
@@ -320,6 +328,11 @@ async function runFilmJob(id, opts) {
   } catch (e) {
     job.status = 'error';
     job.error = e instanceof Error ? e.message : String(e);
+    /* 失败不占额度：把这次的时间戳退回去，可以马上重试 */
+    try {
+      const arr = (filmQuota.get(opts.ip) || []).filter((t) => t !== opts.at);
+      filmQuota.set(opts.ip, arr);
+    } catch { /* 忽略 */ }
   } finally {
     rmSync(dir, { recursive: true, force: true });
     setTimeout(() => filmJobs.delete(id), 60 * 60 * 1000);
@@ -688,10 +701,12 @@ const server = createServer(async (req, res) => {
       }
       hits.push(now);
       filmQuota.set(ip, hits);
+      const quotaIp = ip;
+      const quotaAt = now;
       const id = randomBytes(6).toString('hex');
       const host = String(req.headers.host || 'localhost');
       filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 6, url: '', error: '', at: Date.now() });
-      void runFilmJob(id, { key, script: body.script || {}, storyText: String(body.storyText ?? ''), musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host, roomId: String(body.roomId ?? '') });
+      void runFilmJob(id, { key, script: body.script || {}, storyText: String(body.storyText ?? ''), musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host, roomId: String(body.roomId ?? ''), ip: quotaIp, at: quotaAt });
       return json(res, 200, { id });
     }
     if (path.startsWith('/api/film-jobs/') && req.method === 'GET') {
