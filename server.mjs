@@ -119,6 +119,16 @@ const OWNER_KEY = (() => {
   return String(process.env.ARK_API_KEY || '').trim();
 })();
 
+/* 参考样片里提炼出来的风格（只复刻风格，不复刻剧情/人物） */
+const STYLE = [
+  '日系 2D 动画赛璐璐风格，细线条、柔和高光、干净的色块。',
+  '背景做浅景深虚化：斑驳阳光、树影光斑、暖色 bokeh，像真实风景被动画化。',
+  '暖色调（米金、暖橙、浅绿），明亮通透，胶片感轻微颗粒。',
+  '镜头缓慢轻推或轻微横移，稳定不抖，电影感构图。',
+  '氛围：日常、温柔、治愈、青春恋爱。',
+].join('');
+
+const NEGATIVE = '避免出现：人脸扭曲、肢体畸形、画面闪烁、抖动、崩坏、模糊、变形、Q版形象失效、物体穿模、五官错乱、多手多脚、文字乱码。';
 /* 防刷：同一个 IP 每天最多 5 次，且两次之间至少隔 30 分钟 */
 const filmQuota = new Map();
 const rooms = new Map();
@@ -133,21 +143,31 @@ async function runFilmJob(id, opts) {
     const segs = Array.isArray(opts.script.segments) ? opts.script.segments.slice(0, 6) : [];
     if (!segs.length) throw new Error('脚本里没有分镜。');
     job.total = segs.length;
-    const refs = (Array.isArray(opts.images) ? opts.images : []).filter((s) => typeof s === 'string' && s.startsWith('/qstyle/')).slice(0, 1);
-    const refUrl = refs.length ? 'http://' + opts.host + refs[0] : '';
+    const toUrl = (s) => 'http://' + opts.host + s;
+    const charRefs = (Array.isArray(opts.avatars) ? opts.avatars : [])
+      .filter((s) => typeof s === 'string' && s.startsWith('/qstyle/'))
+      .slice(0, 2)
+      .map(toUrl);
+    const bgRefs = (Array.isArray(opts.images) ? opts.images : [])
+      .filter((s) => typeof s === 'string' && s.startsWith('/qstyle/'))
+      .slice(0, 1)
+      .map(toUrl);
     const outs = [];
     for (let i = 0; i < segs.length; i += 1) {
       job.phase = 'segments';
       job.step = i + 1;
       const seg = segs[i];
+      seg.refs = charRefs.concat(bgRefs);
       const prompt = [
-        '极简 Q 版小人动画，温柔、治愈、回忆感、低饱和柔光，不要真人，不要复杂五官，不要夸张剧情。',
+        STYLE,
         '这一镜：' + (seg.scene || '') + '；镜头' + (seg.shot || '缓慢推近') + '；情绪' + (seg.emotion || '温柔') + '。',
+        '画面里是两位 Q 版动画人物（以人物参考图为准，不要变成真人）。',
+        (seg.refs && seg.refs.length > 1) ? '背景使用风景参考图，做成同风格动画背景。' : '',
         seg.subtitle ? '字幕只出现这一句：' + seg.subtitle : '',
-        '人物形象与参考图完全一致，背景干净。',
+        NEGATIVE,
       ].filter(Boolean).join('\n');
       const content = [{ type: 'text', text: prompt }];
-      if (refUrl) content.push({ type: 'image_url', image_url: { url: refUrl } });
+      (seg.refs || []).slice(0, 2).forEach((ref) => { if (ref) content.push({ type: 'image_url', image_url: { url: ref } }); });
       const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
@@ -470,7 +490,9 @@ const server = createServer(async (req, res) => {
           headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
           body: JSON.stringify({
             model: 'doubao-seedream-5-5-261028',
-            prompt: 'Turn this photo into a cute chibi cartoon character: big head, big eyes, small body, flat pastel colors, thick clean outline, sticker style, keep the person recognizable, plain soft background',
+            prompt: String(req.headers['x-kind'] || 'portrait') === 'scene'
+              ? 'Turn this photo into a soft anime-style background: cel-shaded 2D anime scenery, warm sunlight, dappled light, gentle bokeh, pastel warm tones, clean lineart, no people, no text'
+              : 'Turn this photo into a cute chibi anime character: big head, big eyes, cel-shaded 2D anime style, soft warm light, clean lineart, keep the person recognizable, plain soft background, no text',
             image: dataUrl,
             size: '1024x1024',
             response_format: 'url',
@@ -556,7 +578,7 @@ const server = createServer(async (req, res) => {
       const id = randomBytes(6).toString('hex');
       const host = String(req.headers.host || 'localhost');
       filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 6, url: '', error: '', at: Date.now() });
-      void runFilmJob(id, { key, script: body.script || {}, musicUrl: String(body.musicUrl ?? ''), images: body.images || [], host });
+      void runFilmJob(id, { key, script: body.script || {}, musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host });
       return json(res, 200, { id });
     }
     if (path.startsWith('/api/film-jobs/') && req.method === 'GET') {

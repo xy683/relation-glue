@@ -210,13 +210,13 @@
     } catch (e) { return null; }
   }
   /** 用使用者自己的 Key 把真人照片变成 Q 版；失败就保留原图。 */
-  async function toChibi(dataUrl) {
+  async function toChibi(dataUrl, kind) {
     if (!dataUrl) return '';
     try {
       const blob = await (await fetch(dataUrl)).blob();
       const res = await fetch('/api/qstyle', {
         method: 'POST',
-        headers: { 'content-type': blob.type || 'image/jpeg' },
+        headers: { 'content-type': blob.type || 'image/jpeg', 'x-kind': kind === 'scene' ? 'scene' : 'portrait' },
         body: blob,
       });
       const body = await res.json().catch(() => ({}));
@@ -231,7 +231,7 @@
     if (!key || !photos.length) return;
     const indexes = photos.map((_, i) => i).slice(0, 4);
     if (state) state.textContent = '正在把照片变成 Q 版…';
-    const results = await Promise.all(indexes.map((i) => toChibi(photos[i])));
+    const results = await Promise.all(indexes.map((i) => toChibi(photos[i], 'scene')));
     let ok = 0;
     results.forEach((url, k) => { if (url) { photos[indexes[k]] = url; ok += 1; } });
     if (state) state.textContent = '已选 ' + photos.length + ' 张' + (ok ? '（' + ok + ' 张 Q 版）' : '（Q 版生成失败，用原图）');
@@ -512,7 +512,7 @@
           if (avatars.peer) { const u = await toChibi(avatars.peer); if (u) avatars.peer = u; }
           if (photos.length) {
             const idxs = photos.map((_, i) => i).slice(0, 4);
-            const urls = await Promise.all(idxs.map((i) => toChibi(photos[i])));
+            const urls = await Promise.all(idxs.map((i) => toChibi(photos[i], 'scene')));
             urls.forEach((url, k) => { if (url) photos[idxs[k]] = url; });
           }
           const dense = log.split(String.fromCharCode(10)).filter((l) => l.trim()).length > 50;
@@ -701,7 +701,7 @@
 
     let jobId = '';
     try {
-      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script, musicUrl: story.musicUrl, images: story.images }) });
+      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script, musicUrl: story.musicUrl, images: story.images, avatars: story.avatars }) });
       const jb = await jr.json().catch(() => ({}));
       if (!jr.ok) throw new Error(jb.error || '任务没建成');
       jobId = jb.id;
