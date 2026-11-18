@@ -377,7 +377,8 @@ const server = createServer(async (req, res) => {
       const refUrl = refs.length ? ('http://' + String(req.headers.host || 'localhost') + refs[0]) : '';
       const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
       const outs = [];
-      const segments = Math.max(1, Math.min(4, Number(body.segments) || 4));
+      const wantSeconds = Math.max(10, Math.min(60, Math.round((Number(story.duration) || 60000) / 1000)));
+      const segments = Math.max(1, Math.min(6, Number(body.segments) || Math.ceil(wantSeconds / 10)));
       try {
         for (let i = 0; i < segments; i += 1) {
           const act = acts[Math.min(i, acts.length - 1)] || {};
@@ -393,7 +394,7 @@ const server = createServer(async (req, res) => {
           const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
             method: 'POST',
             headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
-            body: JSON.stringify({ model, content, ratio: '9:16', duration: 15 }),
+            body: JSON.stringify({ model, content, ratio: '9:16', duration: 10 }),
           });
           const rawCreate = await created.text();
           if (!created.ok) {

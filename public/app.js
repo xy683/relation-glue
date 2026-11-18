@@ -551,7 +551,7 @@
       const old = filmAiBtn.textContent;
       filmAiBtn.textContent = '正在生成 AI 动画…（约 10 分钟）';
       try {
-        const res = await fetch('/api/film', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, story: room.story, segments: 4 }) });
+        const res = await fetch('/api/film', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, story: room.story }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || '生成失败');
         toast('AI 动画好了');
