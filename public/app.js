@@ -551,7 +551,7 @@
       const old = filmAiBtn.textContent;
       filmAiBtn.textContent = '正在生成 AI 动画…（约 10 分钟）';
       try {
-        const res = await fetch('/api/film', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, story: room.story }) });
+        const res = await fetch('/api/film', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, story }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || '生成失败');
         toast('AI 动画好了');
@@ -567,7 +567,7 @@
       const old = filmBtn.textContent;
       filmBtn.textContent = '正在渲染成片…（20–60 秒）';
       try {
-        const res = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story: room.story }) });
+        const res = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error || '渲染失败');
         toast('成片好了，正在打开');
@@ -657,8 +657,50 @@
     if (window.GlueMusic) window.GlueMusic.stop();
   }
 
+  /* 成片自动出：普通模式走本地 ffmpeg；智能体模式先试 AI 动画，失败自动退回本地 */
+  let filmStarted = false;
+  function filmDone(url) {
+    const st = $('filmState');
+    if (!st) return;
+    st.textContent = '成片好了：';
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'film.mp4';
+    a.textContent = '下载成片';
+    a.className = 'chip';
+    a.style.marginLeft = '8px';
+    st.appendChild(a);
+  }
+  async function autoFilm(storyArg) {
+    const story = storyArg || room.story;
+    if (filmStarted || !story) return;
+    filmStarted = true;
+    const st = $('filmState');
+    const say = (text) => { if (st) st.textContent = text; };
+    const mode = story.mode || 'plain';
+    try {
+      if (mode === 'agent') {
+        const key = localStorage.getItem('glue.agentKey') || '';
+        if (key) {
+          say('正在生成 AI 动画（6 段 × 10 秒，约 20 分钟）…');
+          const res = await fetch('/api/film', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, story }) });
+          const body = await res.json().catch(() => ({}));
+          if (res.ok && body.url) { filmDone(body.url); return; }
+          say('AI 动画没出来（' + String(body.error || '未知原因').slice(0, 60) + '），改用本地渲染…');
+        }
+      }
+      say('正在渲染成片（约 30 秒）…');
+      const res2 = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story }) });
+      const b2 = await res2.json().catch(() => ({}));
+      if (res2.ok && b2.url) filmDone(b2.url);
+      else say('成片没出来：' + String(b2.error || '再试一次'));
+    } catch (e) {
+      say('成片没出来：' + (e instanceof Error ? e.message : '网络错误'));
+    }
+  }
   /** 等待的时候，房主先看一支循环的预告；另一个人进来就换成同步的正式播放。 */
   function preview(story) {
+    void autoFilm(story);
     if (story && story.musicUrl) startBgm(story.musicUrl);
     stopFilm();
     const canvas = $('film');
