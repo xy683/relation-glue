@@ -119,7 +119,7 @@ const OWNER_KEY = (() => {
   return String(process.env.ARK_API_KEY || '').trim();
 })();
 
-/* 简单的防刷：同一个 IP 一小时最多 2 次视频任务 */
+/* 防刷：同一个 IP 每天最多 5 次，且两次之间至少隔 30 分钟 */
 const filmQuota = new Map();
 const rooms = new Map();
 
@@ -542,8 +542,15 @@ const server = createServer(async (req, res) => {
       if (!key) return json(res, 400, { error: '站长的 Key 还没配好。' });
       const ip = String(req.socket.remoteAddress || 'x');
       const now = Date.now();
-      const hits = (filmQuota.get(ip) || []).filter((t) => now - t < 3600 * 1000);
-      if (hits.length >= 2) return json(res, 429, { error: '这一小时已经生成过 2 支了，歇一会儿再来。' });
+      const DAY = 24 * 3600 * 1000;
+      const GAP = 30 * 60 * 1000;
+      const hits = (filmQuota.get(ip) || []).filter((t) => now - t < DAY);
+      if (hits.length >= 5) return json(res, 429, { error: '今天已经用满 5 次了，隔天再来。' });
+      const last = hits.length ? hits[hits.length - 1] : 0;
+      if (last && now - last < GAP) {
+        const mins = Math.ceil((GAP - (now - last)) / 60000);
+        return json(res, 429, { error: '每 30 分钟只能生成 1 支，还有 ' + mins + ' 分钟。' });
+      }
       hits.push(now);
       filmQuota.set(ip, hits);
       const id = randomBytes(6).toString('hex');
