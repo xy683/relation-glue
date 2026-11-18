@@ -384,11 +384,28 @@ function drawPhoto(ctx, src, w, h, k) {
     ctx.translate(-w / 2, -h * 0.55);
 
     const photoList = story && Array.isArray(story.images) ? story.images : [];
+    const cuts = story && Array.isArray(story.beats) && story.beats.length > 1
+      ? story.beats.filter((b) => b > 0 && b < total)
+      : [];
     let painted = false;
+    let flash = 0;
     if (photoList.length) {
-      const per = total / photoList.length;
-      const idx = Math.min(photoList.length - 1, Math.floor(t / per));
-      if (photoReady(photoList[idx])) painted = drawPhoto(ctx, photoList[idx], w, h, (t % per) / per);
+      let idx = 0;
+      let progress = 0;
+      if (cuts.length > 1) {
+        let k = 0;
+        while (k + 1 < cuts.length && cuts[k + 1] <= t) k += 1;
+        const start = cuts[k];
+        const end = cuts[k + 1] ?? total;
+        idx = k % photoList.length;
+        progress = Math.min(1, Math.max(0, (t - start) / Math.max(1, end - start)));
+        if (t - start < 130) flash = 1 - (t - start) / 130;
+      } else {
+        const per = total / photoList.length;
+        idx = Math.min(photoList.length - 1, Math.floor(t / per));
+        progress = (t % per) / per;
+      }
+      if (photoReady(photoList[idx])) painted = drawPhoto(ctx, photoList[idx], w, h, progress);
     }
     if (!painted) backdrop(ctx, w, h, act, next, blend, t);
 
@@ -476,6 +493,11 @@ function drawPhoto(ctx, src, w, h, k) {
     const titleOut = clamp((local - 0.82) / 0.12, 0, 1);
     ctx.globalAlpha = 1;
     title(ctx, act.title, act.note, w, h, easeOut(titleIn) * (1 - titleOut));
+
+    if (flash > 0) {
+      ctx.fillStyle = 'rgba(255,246,238,' + (flash * 0.5).toFixed(3) + ')';
+      ctx.fillRect(0, 0, w, h);
+    }
 
     /* 换镜：白闪一下，像旧胶片接片 */
     if (blend > 0) {

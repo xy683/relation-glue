@@ -356,6 +356,9 @@ const server = createServer(async (req, res) => {
       story.mode = mode;
       const musicUrl = typeof body.musicUrl === 'string' && /^[/]music[/][A-Za-z0-9._-]+[.][A-Za-z0-9]+$/.test(body.musicUrl) ? body.musicUrl : '';
       story.musicUrl = musicUrl;
+      story.beats = Array.isArray(body.beats)
+        ? body.beats.map(Number).filter((n) => Number.isFinite(n) && n >= 0 && n <= 180000).slice(0, 400).sort((a, b) => a - b)
+        : [];
       /* 两张头像（可选）：客户端已经缩到 320px 的 dataURL，这里只收 image/jpeg 且不超过 200KB */
       const avatars = Array.isArray(body.avatars) ? body.avatars.slice(0, 2) : [];
       const images = Array.isArray(body.images) ? body.images.slice(0, 8) : [];

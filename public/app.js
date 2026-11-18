@@ -188,7 +188,33 @@
   let mode = 'plain';
   const avatars = { me: '', peer: '' };
   const photos = [];
+  /** 从音频里找鼓点：20ms 一窗算能量，超过均值 1.6 倍且明显跃升就算一下。 */
+  function detectBeats(buffer) {
+    try {
+      const data = buffer.getChannelData(0);
+      const win = Math.floor(buffer.sampleRate * 0.02);
+      const energies = [];
+      for (let i = 0; i + win < data.length; i += win) {
+        let sum = 0;
+        for (let j = 0; j < win; j += 4) { const v = data[i + j]; sum += v * v; }
+        energies.push(sum);
+      }
+      if (!energies.length) return [];
+      const avg = energies.reduce((a, b) => a + b, 0) / energies.length;
+      const out = [];
+      let last = -1000;
+      for (let i = 1; i < energies.length; i += 1) {
+        const ms = i * 20;
+        if (energies[i] > avg * 1.6 && energies[i] > energies[i - 1] * 1.25 && ms - last > 420) {
+          out.push(ms);
+          last = ms;
+        }
+      }
+      return out.slice(0, 200);
+    } catch (e) { return []; }
+  }
   let musicUrl = '';
+  let beats = [];
   let bgm = null;
   function stopBgm() { if (bgm) { try { bgm.pause(); } catch (e) { /* 忽略 */ } bgm = null; } }
   function startBgm(url) {
@@ -409,7 +435,7 @@
       button.disabled = true;
       button.textContent = '正在为你生成你的专属视频…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);
