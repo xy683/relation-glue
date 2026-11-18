@@ -497,6 +497,11 @@
     room.role = room.token ? 'host' : 'guest';
     $('home').classList.add('hidden');
     $('room').classList.remove('hidden');
+    /* 接收方不能生成视频，只能等发起人 */
+    if (room.role !== 'host') {
+      const mb = $('makeFilm');
+      if (mb) { mb.disabled = true; mb.textContent = '等发起人生成视频…'; }
+    }
 
     const link = `${location.origin}/r/${id}`;
     $('linkText').textContent = link;
@@ -681,6 +686,7 @@
     stopFilm();
   }
   async function confirmFilm() {
+    if (room.role !== 'host') { toast('只有发起链接的人可以生成视频。'); return; }
     const story = room.story;
     if (!story) { toast('先生成一支小故事。'); return; }
     const btn = $('makeFilm');

@@ -408,18 +408,10 @@ function clearTimers(room) {
 
 /** The film once both are in: a moment's lead, then 15 seconds counted by both pages on the same clock. */
 function startFilm(room) {
+  /* 不再自动开始：等成片生成好（filmUrl 广播）才进入同步观影 */
   if (room.status !== 'waiting') return;
-  room.status = 'film';
-  room.filmStart = Date.now() + LEAD_MS;
-  room.timers.push(setTimeout(() => {
-    if (room.status !== 'film') return;
-    room.status = 'confirm';
-    tell(room);
-  }, LEAD_MS + FILM_MS + 250));
   tell(room);
 }
-
-/** Both said yes: twenty minutes begin, and the words that were here (there are none yet) are cleared. */
 function startChat(room) {
   if (room.status !== 'confirm') return;
   room.status = 'chat';
@@ -923,6 +915,15 @@ const server = createServer(async (req, res) => {
         if (!role) return json(res, 403, { error: '这扇门不为这个身份打开。' });
         if (role === 'guest' && room.joined.host === false && room.joined.guest === true) return json(res, 409, { error: '这间房已经有两个人了。' });
         room.joined[role] = true;
+        /* 如果有人晚进来，而成片已经生成：重新开 30 秒同步观影窗口 */
+        if (room.filmUrl && (room.status === 'waiting' || room.status === 'confirm')) {
+          clearTimers(room);
+          room.status = 'film';
+          room.filmStart = Date.now();
+          room.timers.push(setTimeout(() => {
+            if (room.status === 'film') { room.status = 'confirm'; tell(room); }
+          }, 30_500));
+        }
         if (room.joined.host && room.joined.guest && room.status === 'waiting') startFilm(room);
         else tell(room);
         return json(res, 200, { ok: true, role, state: publicState(room) });
