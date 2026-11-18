@@ -110,6 +110,17 @@ function buildScript(log, me, partner) {
 }
 
 const filmJobs = new Map();
+/* 站长的 Key：优先读 /opt/glue/owner-key.txt，其次环境变量。只留在服务器，绝不下发到浏览器。 */
+const OWNER_KEY = (() => {
+  try {
+    const fromFile = readFileSync(join(HERE, 'owner-key.txt'), 'utf8').trim();
+    if (fromFile) return fromFile;
+  } catch { /* 没有文件就继续 */ }
+  return String(process.env.ARK_API_KEY || '').trim();
+})();
+
+/* 简单的防刷：同一个 IP 一小时最多 2 次视频任务 */
+const filmQuota = new Map();
 const rooms = new Map();
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon' };
@@ -444,7 +455,7 @@ const server = createServer(async (req, res) => {
       }
     }    /* 真人照片 → Q 版：用使用者自己的 Key 调 Seedream 图生图 */
     if (path === '/api/qstyle' && req.method === 'POST') {
-      const key = String(req.headers['x-agent-key'] || '').trim();
+      const key = String(req.headers['x-agent-key'] || '').trim() || OWNER_KEY;
       if (!key) return json(res, 400, { error: '需要你自己的豆包 Key。' });
       const bytes = await readImage(req, 12 * 1024 * 1024);
       if (!bytes.length) return json(res, 400, { error: '图片是空的。' });
@@ -527,8 +538,14 @@ const server = createServer(async (req, res) => {
     /* 成片任务：后台逐段生成，前端轮询进度 */
     if (path === '/api/film-jobs' && req.method === 'POST') {
       const body = await readBody(req, 16 * 1024 * 1024);
-      const key = String(body.key ?? '').trim();
-      if (!key) return json(res, 400, { error: '需要你自己的豆包 Key。' });
+      const key = String(body.key ?? '').trim() || OWNER_KEY;
+      if (!key) return json(res, 400, { error: '站长的 Key 还没配好。' });
+      const ip = String(req.socket.remoteAddress || 'x');
+      const now = Date.now();
+      const hits = (filmQuota.get(ip) || []).filter((t) => now - t < 3600 * 1000);
+      if (hits.length >= 2) return json(res, 429, { error: '这一小时已经生成过 2 支了，歇一会儿再来。' });
+      hits.push(now);
+      filmQuota.set(ip, hits);
       const id = randomBytes(6).toString('hex');
       const host = String(req.headers.host || 'localhost');
       filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 6, url: '', error: '', at: Date.now() });
@@ -544,8 +561,8 @@ const server = createServer(async (req, res) => {
     /* 成片：4 段 15 秒的 Seedance 视频，逐段带同一张 Q 版参考图，最后拼接 + 用户 BGM */
     if (path === '/api/film' && req.method === 'POST') {
       const body = await readBody(req, 16 * 1024 * 1024);
-      const key = String(body.key ?? '').trim();
-      if (!key) return json(res, 400, { error: '需要你自己的豆包 Key。' });
+      const key = String(body.key ?? '').trim() || OWNER_KEY;
+      if (!key) return json(res, 400, { error: '站长的 Key 还没配好。' });
       const story = body.story || {};
       const model = String(body.model ?? 'doubao-seedance-2-0-fast-260128');
       const acts = Array.isArray(story.acts) ? story.acts.slice(0, 5) : [];

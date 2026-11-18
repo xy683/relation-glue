@@ -211,13 +211,12 @@
   }
   /** 用使用者自己的 Key 把真人照片变成 Q 版；失败就保留原图。 */
   async function toChibi(dataUrl) {
-    const key = localStorage.getItem('glue.agentKey') || '';
-    if (!key || !dataUrl) return '';
+    if (!dataUrl) return '';
     try {
       const blob = await (await fetch(dataUrl)).blob();
       const res = await fetch('/api/qstyle', {
         method: 'POST',
-        headers: { 'content-type': blob.type || 'image/jpeg', 'x-agent-key': key },
+        headers: { 'content-type': blob.type || 'image/jpeg' },
         body: blob,
       });
       const body = await res.json().catch(() => ({}));
@@ -228,7 +227,7 @@
 
   /** 把前几张照片并行转 Q 版。 */
   async function stylePhotos(state) {
-    const key = localStorage.getItem('glue.agentKey') || '';
+    if (!photos.length) return;
     if (!key || !photos.length) return;
     const indexes = photos.map((_, i) => i).slice(0, 4);
     if (state) state.textContent = '正在把照片变成 Q 版…';
@@ -506,7 +505,7 @@
       try {
         /* 只有勾了「照片变 Q 版」才调 Seedream，花的是使用者自己的额度 */
         /* 普通模式一律不调豆包；智能体模式自动把照片变 Q 版（用填 Key 那个人的额度） */
-        const wantQ = mode === 'agent' && Boolean(avatars.me || avatars.peer || photos.length);
+        const wantQ = Boolean(avatars.me || avatars.peer || photos.length);
         if (wantQ && (avatars.me || avatars.peer || photos.length)) {
           button.textContent = '正在把照片变成 Q 版…';
           if (avatars.me) { const u = await toChibi(avatars.me); if (u) avatars.me = u; }
@@ -704,11 +703,11 @@
       const j = await r.json().catch(() => ({}));
       script = j.script || null;
     } catch (e) { script = null; }
-    const key = localStorage.getItem('glue.agentKey') || '';
-    if (!key) { await renderLocal(); return; }
+    /* 用站长的 Key，由后端调用模型；前端不需要任何 Key */
+
     let jobId = '';
     try {
-      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, script, musicUrl: story.musicUrl, images: story.images }) });
+      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script, musicUrl: story.musicUrl, images: story.images }) });
       const jb = await jr.json().catch(() => ({}));
       if (!jr.ok) throw new Error(jb.error || '任务没建成');
       jobId = jb.id;
