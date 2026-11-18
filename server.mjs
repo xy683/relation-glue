@@ -346,7 +346,7 @@ function publicState(room, now = Date.now()) {
     filmStart: room.filmStart,
     chatEnd: room.chatEnd,
     serverNow: now,
-    story: room.story,
+    story: Object.assign({}, room.story, { beats: [] }),
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
   };
 }
