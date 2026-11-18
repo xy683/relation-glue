@@ -26,17 +26,7 @@
     <h1 class="hero">暂借片刻幻境，<br>回看<em>相遇的起点</em>。</h1>
     <p class="lede">贴一段聊天记录，我把它读成一支很短的小人闪片：初识、靠近、分享、沉默，再回到第一次说话的那天。<br><span>没有真人，没有脸，只有两个颜色。</span></p>
 
-    <div class="modes" id="modes">
-      <button type="button" class="mode on" data-mode="plain">
-        <b>普通模式</b>
-        <span>固定模板成片，体验单一。现在就能用。</span>
-      </button>
-      <button type="button" class="mode" data-mode="agent">
-        <b>智能体模式 <em>豆包</em></b>
-        <span>豆包读你们的对话、头像和说话方式，定制分镜、配色和 BGM，解锁更完整的那一版。</span>
-      </button>
-    </div>
-    <div class="field hidden" id="agentKeyField">
+    <div class="field" id="agentKeyField">
       <label>豆包 Key <small>你自己的火山方舟 Key；只存在你的浏览器，花的是你的 token</small></label>
       <div class="imports">
         <input id="agentKey" type="text" placeholder="粘贴你自己的 Key（一长串字母数字）" autocomplete="off" spellcheck="false">
@@ -137,6 +127,7 @@
     <div class="stage" id="stage">
       <p class="agent-note" id="agentNote"></p>
       <canvas id="film" width="1080" height="1920" aria-label="十五秒的小人回忆闪片"></canvas>
+      <video id="filmVideo" class="film-video hidden" playsinline controls loop></video>
       <button type="button" class="sound" id="soundBtn">🔊 点一下开声音</button>
       <span class="badge" id="badge">回忆闪片 · 15″</span>
       <span class="film-title" id="filmTitle">初 遇</span>

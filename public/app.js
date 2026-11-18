@@ -185,7 +185,7 @@
     });
   }
 
-  let mode = 'plain';
+  let mode = 'agent';
   const avatars = { me: '', peer: '' };
   const photos = [];
   /** 把解码后的音频转成 16kHz 单声道 WAV，体积小、服务器也认。 */
@@ -342,7 +342,7 @@
       const res = await fetch('/api/agent');
       const body = await res.json().catch(() => ({}));
       const field = $('agentKeyField');
-      if (field) field.classList.toggle('hidden', !(mode === 'agent' && !agentReady));
+    if (field) field.classList.remove('hidden');
       const state = $('agentState');
       if (state) state.textContent = agentReady
         ? ('已用你自己的 Key（' + (body.model || 'doubao') + '），花的是你自己的 token')
@@ -362,7 +362,7 @@
       const idBox = document.getElementById('agentId');
       if (idBox && idBox.value.trim()) localStorage.setItem('glue.agentId', idBox.value.trim());
       agentReady = true;
-      agentKeyField.classList.add('hidden');
+      agentKeyField.classList.remove('hidden');
       agentState.textContent = '已用你自己的 Key，花的是你自己的 token';
       toast('Key 已存在这台设备');
     });
@@ -667,15 +667,16 @@
   let lastPartner = '';
   function filmDone(url) {
     const st = $('filmState');
-    if (!st) return;
-    st.textContent = '成片好了：';
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'film.mp4';
-    a.textContent = '下载成片';
-    a.className = 'chip';
-    a.style.marginLeft = '8px';
-    st.appendChild(a);
+    if (st) st.textContent = '成片好了，正在播放';
+    const video = $('filmVideo');
+    const canvas = $('film');
+    if (video) {
+      video.src = url;
+      video.classList.remove('hidden');
+      video.play().catch(() => {});
+    }
+    if (canvas) canvas.classList.add('hidden');
+    stopFilm();
   }
   async function autoFilm(storyArg) {
     const story = storyArg || room.story;
@@ -703,15 +704,6 @@
       const j = await r.json().catch(() => ({}));
       script = j.script || null;
     } catch (e) { script = null; }
-    if (script && st) {
-      const box = document.createElement('div');
-      box.style.cssText = 'margin-top:8px;line-height:1.7;font-size:12px;color:#e8d9cf;text-align:left;';
-      const rows = (script.segments || []).map((s) => s.index + '. ' + s.time + ' · ' + s.scene + ' · ' + s.shot + ' · 字幕「' + s.subtitle + '」');
-      box.innerHTML = '<b>' + script.characters + '</b><br>' + script.theme + '<br>' + rows.join('<br>');
-      st.textContent = '';
-      st.appendChild(box);
-    }
-
     const key = localStorage.getItem('glue.agentKey') || '';
     if (!key) { await renderLocal(); return; }
     let jobId = '';
