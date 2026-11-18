@@ -469,7 +469,7 @@ function portrait(ctx, src, x, y, w, h, alpha, tilt, t, side) {
     ctx.fillStyle = 'rgba(255,230,210,0.42)';
     ctx.font = '400 22px "PingFang SC","Microsoft YaHei",sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(Math.round(total / 1000) + ' 秒的回忆', w / 2, barY + 44);
+    ctx.fillText(Math.round(total / 1000) + ' 秒 · 阿呦的回忆胶', w / 2, barY + 44);
 
     ctx.restore();
   }
