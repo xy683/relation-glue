@@ -290,7 +290,7 @@ const server = createServer(async (req, res) => {
     }    /* 连通性测试：用使用者自己的 Key + 智能体 ID 发一句话 */
     if (path === '/api/agent/test' && req.method === 'POST') {
       const body = await readBody(req);
-      const out = await testAgent(String(body.key ?? ''), String(body.id ?? ''));
+      const out = await testAgent(String(body.key ?? ''), String(body.id ?? ''), String(body.agentModel ?? ''));
       return json(res, 200, { ok: out.ok, detail: out.detail });
     }    /* 豆包智能体：有没有 Key、用的是哪个模型 */
     if (path === '/api/agent' && req.method === 'GET') {
@@ -317,7 +317,7 @@ const server = createServer(async (req, res) => {
       const media = (log.match(/\[(图片|视频|语音|表情)\]|图片|照片|风景|截图/g) || []).length;
       const seconds = Math.max(15, Math.min(180, Math.round((15 + Math.max(0, lines - 20) * 3 + media * 6) / 3) * 3));
       /* 普通模式固定 15 秒；智能体模式才按信息密度拉长 */
-      story.duration = mode === 'agent' ? seconds * 1000 : 15000;
+      story.duration = seconds * 1000;
       story.mode = mode;
       story.theme = theme;
       if (mode === 'plain') story.music = { root: 'A', tempo: 68, mood: 'warm', theme };
@@ -331,7 +331,7 @@ const server = createServer(async (req, res) => {
         /* 请豆包当导演：它给分镜、颜色、音乐的性格；画面与声音还是本地的 */
         const userKey = String(body.agentKey ?? '').trim();
         const agentId = String(body.agentId ?? '').trim();
-        const result = await designFilm(userKey, log, { me: story.me, partner: story.partner }, agentId);
+        const result = await designFilm(userKey, log, { me: story.me, partner: story.partner }, agentId, String(body.agentModel ?? ''));
         const spec = result.spec;
         const designed = spec ?? localDesign(story.seed, story.stats);
         story.fromAgent = Boolean(spec);
