@@ -245,6 +245,27 @@
     $('room').classList.add('hidden');
     bindImports();
     bindModes();
+    $('exportVideo')?.addEventListener('click', async () => {
+      const story = room.story;
+      if (!story) { toast('先生成一支再导出。'); return; }
+      const btn = $('exportVideo');
+      btn.disabled = true;
+      btn.textContent = '正在渲染…';
+      try {
+        const res = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story }) });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error ?? '渲染失败');
+        const a = document.createElement('a');
+        a.href = body.url;
+        a.download = '回忆短片.mp4';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        toast('做好了：' + body.seconds + ' 秒的 MP4');
+      } catch (e) { toast(e instanceof Error ? e.message : '渲染失败'); }
+      btn.disabled = false;
+      btn.textContent = '导出 MP4';
+    });
     avaMe?.addEventListener('change', async (event) => {
       const file = event.target.files && event.target.files[0];
       if (!file) return;

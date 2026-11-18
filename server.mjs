@@ -21,6 +21,7 @@ import { judge } from './lib/filter.mjs';
 import { logFromOcr } from './lib/ocr.mjs';
 import { decode, detect } from './lib/importers.mjs';
 import { designFilm, hasLegacyKey, localDesign, saveKey, MODEL } from './lib/agent.mjs';
+import { renderFilm } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(HERE, 'public');
@@ -184,6 +185,16 @@ async function runOcr(image, out) {
 }
 
 function serveStatic(req, res, pathname) {
+  if (pathname.startsWith('/outputs/')) {
+    const outDir = join(HERE, 'outputs');
+    const name = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '').replace(/^outputs[/\\]+/, '');
+    const file = resolve(outDir, name);
+    if (!file.startsWith(outDir + sep) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
+    const body = readFileSync(file);
+    res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': body.length, 'cache-control': 'no-cache' });
+    res.end(body);
+    return;
+  }
   const rel = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '');
   const file = resolve(PUBLIC, rel);
   if (!file.startsWith(PUBLIC + sep) && file !== PUBLIC) { res.writeHead(403); res.end(); return; }
@@ -261,7 +272,22 @@ const server = createServer(async (req, res) => {
       }
     }
     /* a room from a chat log: the log is read here and never stored whole */
-    /* 豆包智能体：有没有 Key、用的是哪个模型 */
+    /* 把一支闪片渲染成 MP4：ffmpeg 在本机合成，几十秒出片 */
+    if (path === '/api/render' && req.method === 'POST') {
+      const body = await readBody(req);
+      const story = body.story;
+      if (!story || !Array.isArray(story.acts)) return json(res, 400, { error: '缺了这支片子的分镜。' });
+      const seconds = Math.max(15, Math.min(180, (Number(story.duration) || 15000) / 1000));
+      story.duration = seconds * 1000;
+      const ffmpeg = process.platform === 'win32' ? 'C:/Users/Administrator/Doubao/tools/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
+      const fontName = process.platform === 'win32' ? 'Microsoft YaHei' : 'Noto Sans CJK SC';
+      try {
+        const out = await renderFilm(story, { ffmpeg, fontName, outDir: join(HERE, 'outputs') });
+        return json(res, 200, { url: '/outputs/' + out.id + '.mp4', seconds: out.seconds });
+      } catch (e) {
+        return json(res, 500, { error: e instanceof Error ? e.message : '渲染失败' });
+      }
+    }    /* 豆包智能体：有没有 Key、用的是哪个模型 */
     if (path === '/api/agent' && req.method === 'GET') {
       return json(res, 200, { ready: hasLegacyKey(), model: MODEL, hint: '' });
     }
