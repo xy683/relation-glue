@@ -370,15 +370,16 @@ const server = createServer(async (req, res) => {
       const key = String(body.key ?? '').trim();
       if (!key) return json(res, 400, { error: '需要你自己的豆包 Key。' });
       const story = body.story || {};
-      const model = String(body.model ?? 'doubao-seedance-2-5-flash-261115');
+      const model = String(body.model ?? 'doubao-seedance-2-0-fast-260128');
       const acts = Array.isArray(story.acts) ? story.acts.slice(0, 5) : [];
       if (!acts.length) return json(res, 400, { error: '缺少分镜。' });
       const refs = Array.isArray(story.images) ? story.images.filter((s) => typeof s === 'string' && s.startsWith('/qstyle/')).slice(0, 1) : [];
       const refUrl = refs.length ? ('https://' + String(req.headers.host || 'localhost') + refs[0]) : '';
       const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
       const outs = [];
+      const segments = Math.max(1, Math.min(4, Number(body.segments) || 4));
       try {
-        for (let i = 0; i < 4; i += 1) {
+        for (let i = 0; i < segments; i += 1) {
           const act = acts[Math.min(i, acts.length - 1)] || {};
           const line = act.bubbles && act.bubbles[0] ? act.bubbles[0].text : '';
           const prompt = [

@@ -541,6 +541,25 @@
     $('linkText').textContent = link;
     $('copyLink').addEventListener('click', () => copy(link).then(() => toast('链接已复制')));
     $('copyMain').addEventListener('click', () => copy(link).then(() => toast('专属链接已复制，发给 TA 吧')));
+    const filmAiBtn = $('filmAiBtn');
+    if (filmAiBtn) filmAiBtn.onclick = async () => {
+      const key = localStorage.getItem('glue.agentKey') || '';
+      if (!key) { toast('先填你自己的豆包 Key'); return; }
+      if (!room.story) { toast('先生成一支闪片。'); return; }
+      if (!window.confirm('AI 动画按秒计费（约 1 分钟需要十几分钟生成），确认用你自己的额度？')) return;
+      filmAiBtn.disabled = true;
+      const old = filmAiBtn.textContent;
+      filmAiBtn.textContent = '正在生成 AI 动画…（约 10 分钟）';
+      try {
+        const res = await fetch('/api/film', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, story: room.story, segments: 4 }) });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || '生成失败');
+        toast('AI 动画好了');
+        window.open(body.url, '_blank');
+      } catch (e) { toast(e instanceof Error ? e.message : '生成失败'); }
+      filmAiBtn.disabled = false;
+      filmAiBtn.textContent = old;
+    };
     const filmBtn = $('filmBtn');
     if (filmBtn) filmBtn.onclick = async () => {
       if (!room.story) { toast('先生成一支闪片再导出。'); return; }
