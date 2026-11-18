@@ -625,6 +625,13 @@
       preview(state.story);
     } else if (state.status === 'film') {
       show('film');
+      /* 每次新的观影窗口：两支手机都从头播同一支视频 */
+      if (room.lastFilmStart !== state.filmStart) {
+        room.lastFilmStart = state.filmStart;
+        const v = $('filmVideo');
+        if (v && state.filmUrl) { try { v.currentTime = 0; v.play().catch(() => {}); } catch (e) { /* 忽略 */ } }
+        try { if (window.GlueMusic) window.GlueMusic.rearm(state.story, 0); } catch (e) { /* 忽略 */ }
+      }
       play(state);
     } else if (state.status === 'confirm') {
       stopFilm();
