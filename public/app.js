@@ -233,6 +233,8 @@
       const key = agentKey.value.trim();
       if (!key) return;
       localStorage.setItem('glue.agentKey', key);
+      const idBox = document.getElementById('agentId');
+      if (idBox && idBox.value.trim()) localStorage.setItem('glue.agentId', idBox.value.trim());
       agentReady = true;
       agentKeyField.classList.add('hidden');
       agentState.textContent = '已用你自己的 Key，花的是你自己的 token';
@@ -245,6 +247,18 @@
     $('room').classList.add('hidden');
     bindImports();
     bindModes();
+    $('agentTest')?.addEventListener('click', async () => {
+      const key = localStorage.getItem('glue.agentKey') || (document.getElementById('agentKey')?.value ?? '').trim();
+      const id = localStorage.getItem('glue.agentId') || (document.getElementById('agentId')?.value ?? '').trim();
+      const state = document.getElementById('agentState');
+      if (state) state.textContent = '正在试…';
+      try {
+        const res = await fetch('/api/agent/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key, id }) });
+        const body = await res.json().catch(() => ({}));
+        if (state) state.textContent = body.detail || (body.ok ? '通了' : '没通');
+      } catch (e) { if (state) state.textContent = e instanceof Error ? e.message : '连不上'; }
+    });
+
     $('exportVideo')?.addEventListener('click', async () => {
       const story = room.story;
       if (!story) { toast('先生成一支再导出。'); return; }
@@ -305,7 +319,7 @@
       button.disabled = true;
       button.textContent = '正在把故事读成十五秒…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, agentKey: localStorage.getItem('glue.agentKey') || '', avatars: [avatars.me, avatars.peer].filter(Boolean) }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, me, partner, mode, agentKey: localStorage.getItem('glue.agentKey') || '', agentId: localStorage.getItem('glue.agentId') || '', avatars: [avatars.me, avatars.peer].filter(Boolean) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);

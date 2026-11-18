@@ -20,7 +20,7 @@ import { analyze } from './lib/analyzer.mjs';
 import { judge } from './lib/filter.mjs';
 import { logFromOcr } from './lib/ocr.mjs';
 import { decode, detect } from './lib/importers.mjs';
-import { designFilm, hasLegacyKey, localDesign, saveKey, MODEL } from './lib/agent.mjs';
+import { designFilm, hasLegacyKey, localDesign, saveKey, testAgent, MODEL } from './lib/agent.mjs';
 import { renderFilm } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -287,6 +287,11 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return json(res, 500, { error: e instanceof Error ? e.message : '渲染失败' });
       }
+    }    /* 连通性测试：用使用者自己的 Key + 智能体 ID 发一句话 */
+    if (path === '/api/agent/test' && req.method === 'POST') {
+      const body = await readBody(req);
+      const out = await testAgent(String(body.key ?? ''), String(body.id ?? ''));
+      return json(res, 200, { ok: out.ok, detail: out.detail });
     }    /* 豆包智能体：有没有 Key、用的是哪个模型 */
     if (path === '/api/agent' && req.method === 'GET') {
       return json(res, 200, { ready: hasLegacyKey(), model: MODEL, hint: '' });
@@ -321,9 +326,12 @@ const server = createServer(async (req, res) => {
       if (mode === 'agent') {
         /* 请豆包当导演：它给分镜、颜色、音乐的性格；画面与声音还是本地的 */
         const userKey = String(body.agentKey ?? '').trim();
-        const spec = await designFilm(userKey, log, { me: story.me, partner: story.partner });
+        const agentId = String(body.agentId ?? '').trim();
+        const result = await designFilm(userKey, log, { me: story.me, partner: story.partner }, agentId);
+        const spec = result.spec;
         const designed = spec ?? localDesign(story.seed, story.stats);
         story.fromAgent = Boolean(spec);
+        story.agentNote = spec ? (agentId ? '豆包智能体定制' : '豆包定制') : (result.error ? ('豆包：' + result.error) : '没填 Key，先按本地的来');
         story.agentNote = spec ? '豆包定制' : (userKey ? '豆包这次没回话，先按本地的来' : '没填 Key，先按本地的来');
         designed.acts.forEach((a, i) => {
           if (story.acts[i]) { story.acts[i].title = a.title; story.acts[i].note = a.note; }
