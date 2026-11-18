@@ -541,6 +541,22 @@
     $('linkText').textContent = link;
     $('copyLink').addEventListener('click', () => copy(link).then(() => toast('链接已复制')));
     $('copyMain').addEventListener('click', () => copy(link).then(() => toast('专属链接已复制，发给 TA 吧')));
+    const filmBtn = $('filmBtn');
+    if (filmBtn) filmBtn.onclick = async () => {
+      if (!room.story) { toast('先生成一支闪片再导出。'); return; }
+      filmBtn.disabled = true;
+      const old = filmBtn.textContent;
+      filmBtn.textContent = '正在渲染成片…（20–60 秒）';
+      try {
+        const res = await fetch('/api/render', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ story: room.story }) });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || '渲染失败');
+        toast('成片好了，正在打开');
+        window.open(body.url, '_blank');
+      } catch (e) { toast(e instanceof Error ? e.message : '渲染失败'); }
+      filmBtn.disabled = false;
+      filmBtn.textContent = old;
+    };
 
     try {
       const res = await fetch(`/api/rooms/${id}/join`, {
