@@ -151,7 +151,7 @@ async function runFilmJob(id, opts) {
       const created = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
-        body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: 10 }),
+        body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: 10, resolution: '480p' }),
       });
       const raw = await created.text();
       if (!created.ok) {
