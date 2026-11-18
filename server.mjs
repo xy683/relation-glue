@@ -10,7 +10,7 @@
  * service runs, on a phone or on a computer, on the same network.
  */
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -174,8 +174,63 @@ const OWNER_KEY = (() => {
   return String(process.env.ARK_API_KEY || '').trim();
 })();
 
-/* 参考样片里提炼出来的风格（只复刻风格，不复刻剧情/人物） */
-const STYLE = [
+/* ── 先收钱，再生成 ─────────────────────────────────────
+ * 一次成片 29.9 元（3 段 ×10 秒，480P）。顾客点「是」才建订单；
+ * 站长在 /owner 页面确认到账之后，服务器才用 OWNER_KEY 调模型。
+ * 管理口令不写进代码：由 owner-key.txt 派生，或环境变量 GLUE_ADMIN_KEY 指定。 */
+const ORDER_PRICE = 29.9;
+const orders = new Map();
+const ADMIN_KEY = (() => {
+  const fromEnv = String(process.env.GLUE_ADMIN_KEY || '').trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const fromFile = readFileSync(join(HERE, 'admin-key.txt'), 'utf8').trim();
+    if (fromFile) return fromFile;
+  } catch { /* 没有就派生 */ }
+  if (OWNER_KEY) return createHash('sha256').update('glue-admin-v1:' + OWNER_KEY).digest('hex').slice(0, 24);
+  return '';
+})();
+const adminOk = (url) => {
+  const given = String(url.searchParams.get('key') || '');
+  if (!ADMIN_KEY || given.length !== ADMIN_KEY.length) return false;
+  return createHash('sha256').update(given).digest('hex') === createHash('sha256').update(ADMIN_KEY).digest('hex');
+};
+function createOrder(room) {
+  const id = randomBytes(6).toString('hex');
+  room.order = { id, amount: ORDER_PRICE, status: 'awaiting', at: Date.now() };
+  orders.set(id, room);
+  return room.order;
+}
+/** 站长确认到账：这里才开始花钱调模型 */
+function beginPaidFilm(room) {
+  if (!OWNER_KEY) {
+    room.order.status = 'error';
+    room.order.error = '站长的 Key 还没配好';
+    tell(room);
+    return '';
+  }
+  const jobId = randomBytes(6).toString('hex');
+  filmJobs.set(jobId, { status: 'running', phase: 'script', step: 0, total: 3, url: '', error: '', at: Date.now() });
+  room.order.status = 'paid';
+  room.order.paidAt = Date.now();
+  room.order.jobId = jobId;
+  void runFilmJob(jobId, {
+    key: OWNER_KEY,
+    script: room.story.script || {},
+    storyText: room.story.storyText || '',
+    musicUrl: room.story.musicUrl || '',
+    images: room.story.images || [],
+    avatars: room.story.avatars || [],
+    host: '',
+    roomId: room.id,
+    ip: 'order:' + room.id,
+    at: Date.now(),
+  });
+  tell(room);
+  return jobId;
+}
+
+/* 参考样片里提炼出来的风格（只复刻风格，不复刻剧情/人物） */const STYLE = [
   '日系 2D 动画电影质感，赛璐璐上色，Q 版小人（约 2.5 头身）：大头、大眼、小身体，圆润可爱，线条干净，柔和高光。',
   '同一部短片里的连续镜头：同一对角色（男生黑发、女生长发，长相与服装以人物参考图为准），前后完全一致。',
   '两个角色始终同框、有互动：对视、并肩走、递东西、一起坐着、一起笑；不要空镜、不要只拍风景、不要火柴人。',
@@ -309,9 +364,8 @@ async function runFilmJob(id, opts) {
         });
         return { ok: r.ok, raw: await r.text() };
       };
-      /* 720p 更清楚；这个模型万一不认 720p，就退回 480p，不让整支片子失败 */
-      let made = await make('720p');
-      if (!made.ok) made = await make('480p');
+      /* 站长定价 29.9 元一支：固定 480P、30 秒，和之前的片子一致 */
+      const made = await make('480p');
       if (!made.ok) {
         let msg = made.raw.slice(0, 200);
         try { const j = JSON.parse(made.raw); msg = j.error?.message || msg; } catch { /* 忽略 */ }
@@ -415,6 +469,14 @@ async function runFilmJob(id, opts) {
       const arr = (filmQuota.get(opts.ip) || []).filter((t) => t !== opts.at);
       filmQuota.set(opts.ip, arr);
     } catch { /* 忽略 */ }
+    if (opts.roomId) {
+      const room = rooms.get(opts.roomId);
+      if (room && room.order && room.order.status === 'paid') {
+        room.order.status = 'failed';
+        room.order.error = job.error;
+        tell(room);
+      }
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
     setTimeout(() => filmJobs.delete(id), 60 * 60 * 1000);
@@ -475,6 +537,7 @@ function publicState(room, now = Date.now()) {
     serverNow: now,
     story: Object.assign({}, room.story, { beats: [] }),
     filmUrl: room.filmUrl || '',
+    order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status } : null,
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
   };
 }
@@ -784,31 +847,14 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { script });
     }
 
-    /* 成片任务：后台逐段生成，前端轮询进度 */
+    /* 成片任务：只留给「已经确认到账」的房间；普通客户不能直接调 */
     if (path === '/api/film-jobs' && req.method === 'POST') {
       const body = await readBody(req, 16 * 1024 * 1024);
-      const key = String(body.key ?? '').trim() || OWNER_KEY;
-      if (!key) return json(res, 400, { error: '站长的 Key 还没配好。' });
-      const ip = String(req.socket.remoteAddress || 'x');
-      const now = Date.now();
-      const DAY = 24 * 3600 * 1000;
-      const GAP = 30 * 60 * 1000;
-      const hits = (filmQuota.get(ip) || []).filter((t) => now - t < DAY);
-      if (hits.length >= 5) return json(res, 429, { error: '今天已经用满 5 次了，隔天再来。' });
-      const last = hits.length ? hits[hits.length - 1] : 0;
-      if (last && now - last < GAP) {
-        const mins = Math.ceil((GAP - (now - last)) / 60000);
-        return json(res, 429, { error: '每 30 分钟只能生成 1 支，还有 ' + mins + ' 分钟。' });
+      const room = rooms.get(String(body.roomId ?? ''));
+      if (!room || !room.order || room.order.status !== 'paid') {
+        return json(res, 402, { error: '生成前要先付款，并且由站长确认到账。' });
       }
-      hits.push(now);
-      filmQuota.set(ip, hits);
-      const quotaIp = ip;
-      const quotaAt = now;
-      const id = randomBytes(6).toString('hex');
-      const host = String(req.headers.host || 'localhost');
-      filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 3, url: '', error: '', at: Date.now() });
-      void runFilmJob(id, { key, script: body.script || {}, storyText: String(body.storyText ?? ''), musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host, roomId: String(body.roomId ?? ''), ip: quotaIp, at: quotaAt });
-      return json(res, 200, { id });
+      return json(res, 200, { id: room.order.jobId || '' });
     }
     if (path.startsWith('/api/film-jobs/') && req.method === 'GET') {
       const id = path.split('/')[3];
@@ -818,6 +864,10 @@ const server = createServer(async (req, res) => {
     }
     /* 成片：4 段 15 秒的 Seedance 视频，逐段带同一张 Q 版参考图，最后拼接 + 用户 BGM */
     if (path === '/api/film' && req.method === 'POST') {
+      return json(res, 410, { error: '这个入口已经停用，请在房间里付款后生成。' });
+    }
+    /* 旧入口（已停用） */
+    if (false && path === '/api/film' && req.method === 'POST') {
       const body = await readBody(req, 16 * 1024 * 1024);
       const key = String(body.key ?? '').trim() || OWNER_KEY;
       if (!key) return json(res, 400, { error: '站长的 Key 还没配好。' });
@@ -989,13 +1039,60 @@ const server = createServer(async (req, res) => {
         id, hostToken: randomBytes(18).toString('base64url'), createdAt: Date.now(),
         names: { me: story.me, partner: story.partner }, story,
         status: 'waiting', joined: { host: false, guest: false }, confirm: { host: null, guest: null },
-        filmStart: null, chatEnd: null, messages: [], sse: new Set(), timers: [],
+        filmStart: null, chatEnd: null, messages: [], sse: new Set(), timers: [], order: null,
       };
       rooms.set(id, room);
       return json(res, 201, { id, hostToken: room.hostToken });
     }
 
-    const open = /^\/api\/rooms\/([A-Za-z0-9_-]{6,32})\/(state|events|join|confirm|message|offer|answer)$/.exec(path);
+    /* 站长上传收款码（不进公开仓库，放在 public/pay/） */
+    if (path === '/api/pay/qr' && req.method === 'POST') {
+      if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
+      const kind = String(req.headers['x-kind'] || '');
+      if (kind !== 'wechat' && kind !== 'alipay') return json(res, 400, { error: '不认识这个收款码。' });
+      const bytes = await readImage(req, 8 * 1024 * 1024);
+      if (!bytes.length) return json(res, 400, { error: '图是空的。' });
+      const dir = join(PUBLIC, 'pay');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, kind + '.jpg'), bytes);
+      return json(res, 200, { ok: true, url: '/pay/' + kind + '.jpg', bytes: bytes.length });
+    }
+
+    /* 站长后台：看订单、确认到账、取消 */
+    if (path === '/api/admin/orders' && req.method === 'GET') {
+      if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
+      const list = [...orders.values()]
+        .filter((room) => room && room.order)
+        .map((room) => ({
+          id: room.order.id,
+          roomId: room.id,
+          names: room.names,
+          amount: room.order.amount,
+          status: room.order.status,
+          at: room.order.at,
+          error: room.order.error || '',
+        }))
+        .sort((a, b) => b.at - a.at)
+        .slice(0, 60);
+      return json(res, 200, { orders: list, price: ORDER_PRICE });
+    }
+    if (path.startsWith('/api/admin/orders/') && req.method === 'POST') {
+      if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
+      const m = /^\/api\/admin\/orders\/([a-f0-9]{12})\/(confirm|cancel)$/.exec(path);
+      if (!m) return json(res, 404, { error: '没有这个订单。' });
+      const room = orders.get(m[1]);
+      if (!room || !room.order) return json(res, 404, { error: '订单不见了。' });
+      if (m[2] === 'confirm') {
+        if (room.status !== 'waiting') return json(res, 409, { error: '这间房已经不在等待了。' });
+        beginPaidFilm(room);
+      } else {
+        room.order.status = 'cancelled';
+        tell(room);
+      }
+      return json(res, 200, { ok: true, status: room.order.status });
+    }
+
+    const open = /^\/api\/rooms\/([A-Za-z0-9_-]{6,32})\/(state|events|join|confirm|message|offer|answer|checkout|paid)$/.exec(path);
     if (open) {
       const room = roomFor(open[1]);
       if (!room) return json(res, 404, { error: '这间房已经不在了，链接也许过期了。' });
@@ -1034,6 +1131,31 @@ const server = createServer(async (req, res) => {
           tell(room);
         }
         return json(res, 200, { ok: true, role, state: publicState(room) });
+      }
+
+      /* 顾客点「是」：建一张 29.9 元的订单，等站长确认到账 */
+      if (action === 'checkout' && req.method === 'POST') {
+        const body = await readBody(req);
+        const role = seatOf(room, body.role, body.token);
+        if (role !== 'host') return json(res, 403, { error: '只有发起链接的人可以充值。' });
+        if (room.status !== 'waiting') return json(res, 409, { error: '现在不是充值的时候。' });
+        if (!room.order || room.order.status === 'cancelled' || room.order.status === 'failed') createOrder(room);
+        tell(room);
+        return json(res, 200, { order: { id: room.order.id, amount: room.order.amount, status: room.order.status } });
+      }
+
+      /* 顾客点「我已完成付款」：进入待确认，不调模型 */
+      if (action === 'paid' && req.method === 'POST') {
+        const body = await readBody(req);
+        const role = seatOf(room, body.role, body.token);
+        if (role !== 'host') return json(res, 403, { error: '只有发起链接的人可以确认。' });
+        if (!room.order) return json(res, 409, { error: '还没有订单。' });
+        if (room.order.status === 'awaiting') {
+          room.order.status = 'review';
+          room.order.reviewAt = Date.now();
+        }
+        tell(room);
+        return json(res, 200, { order: { id: room.order.id, amount: room.order.amount, status: room.order.status } });
       }
 
       if (action === 'confirm' && req.method === 'POST') {
@@ -1100,6 +1222,7 @@ const server = createServer(async (req, res) => {
       return json(res, 405, { error: '不是这个动作。' });
     }
 
+    if (path === '/owner' || path === '/owner.html') return serveStatic(req, res, '/owner.html');
     if (path === '/' || path === '/index.html' || /^\/r\/[A-Za-z0-9_-]{6,32}\/?$/.test(path)) {
       return serveStatic(req, res, '/index.html');
     }

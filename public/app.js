@@ -344,6 +344,16 @@
   function home() {
     $('home').classList.remove('hidden');
     $('room').classList.add('hidden');
+    /* 从充值弹窗点「否」回来时，把写好的故事放回输入框 */
+    try {
+      const back = JSON.parse(sessionStorage.getItem('glue.backlog') || 'null');
+      if (back) {
+        if (back.log) $('log').value = back.log;
+        if (back.me) $('me').value = back.me;
+        if (back.partner) $('partner').value = back.partner;
+        sessionStorage.removeItem('glue.backlog');
+      }
+    } catch (e) { /* 忽略 */ }
     bindImports();
     bindModes();
     $('musicFile')?.addEventListener('change', async (event) => {
@@ -629,6 +639,11 @@
     room.state = state;
     $('names').innerHTML = `<i>${escape0(state.names.me)}</i> &nbsp;·&nbsp; <u>${escape0(state.names.partner)}</u>`;
 
+    /* 付款状态：待确认 / 已确认到账时，把充值弹窗留在原位并继续等 */
+    if (state.order && room.role === 'host' && !state.filmUrl && (state.order.status === 'review' || state.order.status === 'paid')) {
+      showPayWaiting(state.order.status);
+    }
+
     if (state.status === 'waiting') {
       $('presence').textContent = state.joined.host && state.joined.guest ? '' : '等 TA 进来';
       show('waiting');
@@ -767,54 +782,113 @@
     tick();
     room.readyTick = setInterval(tick, 500);
   }
-  async function confirmFilm() {
-    if (room.role !== 'host') { toast('只有发起链接的人可以生成视频。'); return; }
-    const story = room.story;
-    if (!story) { toast('先生成一支小故事。'); return; }
-    const btn = $('makeFilm');
-    const st = $('filmState');
-    const say = (text) => { if (st) st.textContent = text; };
-    if (btn) { btn.disabled = true; btn.textContent = '正在生成…'; }
+  /* ── 充值 → 站长确认到账 → 才生成 ─────────────────── */
+  let payPoll = 0;
+  let payWatching = false;
+
+  function openPay() {
+    const modal = $('payModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    $('payStep1').classList.remove('hidden');
+    $('payStep2').classList.add('hidden');
+    $('payState').textContent = '';
+    $('payDone').disabled = false;
+  }
+  function closePay() {
+    const modal = $('payModal');
+    if (modal) modal.classList.add('hidden');
+    clearInterval(payPoll);
+    payWatching = false;
+  }
+  async function payYes() {
+    $('payStep1').classList.add('hidden');
+    $('payStep2').classList.remove('hidden');
+    $('payState').textContent = '正在创建订单…';
     try {
-      say('正在把照片变成 Q 版…');
-      const conv = async (src, kind) => (typeof src === 'string' && src.startsWith('/qstyle/')) ? src : await toChibi(src, kind);
-      const av = Array.isArray(story.avatars) ? story.avatars.slice(0, 2) : [];
-      const imgs = Array.isArray(story.images) ? story.images.slice(0, 4) : [];
-      if (av.length || imgs.length) {
-        const qa = (await Promise.all(av.map((s) => conv(s, 'portrait')))).filter(Boolean);
-        const qi = (await Promise.all(imgs.map((s) => conv(s, 'scene')))).filter(Boolean);
-        if (qa.length) story.avatars = qa;
-        if (qi.length) story.images = qi;
-      }
-      const total = (story.script && story.script.segments ? story.script.segments.length : 3);
-      say('正在生成第 1/' + total + ' 段视频…');
-      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script: story.script, storyText: story.storyText, musicUrl: story.musicUrl, images: story.images, avatars: story.avatars, roomId: room.id }) });
-      const jb = await jr.json().catch(() => ({}));
-      if (!jr.ok) throw new Error(jb.error || '任务没建成');
-      const jobId = jb.id;
-      for (let k = 0; k < 900; k += 1) {
-        await new Promise((ok) => setTimeout(ok, 2000));
-        let s = null;
-        try { s = await (await fetch('/api/film-jobs/' + jobId)).json(); } catch (e) { continue; }
-        if (!s) continue;
-        if (s.phase === 'segments') say('正在生成第 ' + s.step + '/' + s.total + ' 段视频…');
-        else if (s.phase === 'concat') say('正在拼接完整回忆短片…');
-        if (s.status === 'done') {
-          say('成片好了，先别放，等 TA 进来');
-          try { apply(await (await fetch(`/api/rooms/${room.id}/state`)).json()); } catch (e) { /* SSE 也会送来 */ }
-          return;
-        }
-        if (s.status === 'error') throw new Error(s.error);
-      }
-      throw new Error('生成超时了，稍后再试。');
+      const res = await fetch(`/api/rooms/${room.id}/checkout`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role: room.role, token: room.token }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || '订单没建成');
+      $('payState').textContent = '扫码付 29.9 元；付完点上面的按钮。';
     } catch (e) {
-      say('生成失败：' + (e instanceof Error ? e.message : '未知') + '（可以马上点「确认生成视频」重试，不算次数）');
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '确认生成视频'; }
+      $('payState').textContent = e instanceof Error ? e.message : '订单没建成';
     }
   }
+  async function payDone() {
+    const btn = $('payDone');
+    if (btn) btn.disabled = true;
+    $('payState').textContent = '已提交，等站长确认到账…';
+    try {
+      const res = await fetch(`/api/rooms/${room.id}/paid`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role: room.role, token: room.token }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || '没提交上去');
+      startPayWatch();
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      $('payState').textContent = e instanceof Error ? e.message : '没提交上去';
+    }
+  }
+  function showPayWaiting(status) {
+    const modal = $('payModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    $('payStep1').classList.add('hidden');
+    $('payStep2').classList.remove('hidden');
+    const el = $('payState');
+    if (el) el.textContent = status === 'paid' ? '已确认到账，正在生成（480P · 30 秒）…' : '等站长确认到账…';
+    startPayWatch();
+  }
+  function startPayWatch() {
+    if (payWatching) return;
+    payWatching = true;
+    clearInterval(payPoll);
+    payPoll = setInterval(async () => {
+      let s = null;
+      try { s = await (await fetch(`/api/rooms/${room.id}/state`)).json(); } catch (e) { return; }
+      if (!s) return;
+      const el = $('payState');
+      if (s.filmUrl) { closePay(); apply(s); return; }
+      const st = s.order && s.order.status;
+      if (st === 'paid') { if (el) el.textContent = '已确认到账，正在生成（480P · 30 秒）…'; return; }
+      if (st === 'cancelled') {
+        clearInterval(payPoll); payWatching = false;
+        if (el) el.textContent = '站长没有确认到账。如果你已经付款，请联系站长。';
+        if ($('payDone')) $('payDone').disabled = false;
+        return;
+      }
+      if (st === 'failed') {
+        clearInterval(payPoll); payWatching = false;
+        if (el) el.textContent = '生成失败了：' + ((s.order && s.order.error) || '未知原因') + '。';
+        if ($('payDone')) $('payDone').disabled = false;
+      }
+    }, 3000);
+  }
+  /** 点「否」：不扣费、不生成，带着写好的故事回到填写页面 */
+  function payNo() {
+    closePay();
+    try {
+      sessionStorage.setItem('glue.backlog', JSON.stringify({
+        log: (room.story && room.story.storyText) || '',
+        me: (room.state && room.state.names && room.state.names.me) || '',
+        partner: (room.state && room.state.names && room.state.names.partner) || '',
+      }));
+    } catch (e) { /* 忽略 */ }
+    location.href = '/';
+  }
 
-  /* 只有点这个按钮才会调模型 */
+  function confirmFilm() {
+    if (room.role !== 'host') { toast('只有发起链接的人可以充值生成。'); return; }
+    if (!room.story) { toast('先生成一支小故事。'); return; }
+    openPay();
+  }
+
+  /* 只有点这个按钮才会进充值流程 */
   document.addEventListener('click', (event) => {
     const el = event.target;
     if (el && el.id === 'makeFilm') { event.preventDefault(); void confirmFilm(); }
@@ -946,6 +1020,9 @@
   }
 
   /* ── 事件 ─────────────────────────────────────────── */
+  $('payNo')?.addEventListener('click', payNo);
+  $('payYes')?.addEventListener('click', () => void payYes());
+  $('payDone')?.addEventListener('click', () => void payDone());
   $('accept').addEventListener('click', () => void answer(true));
   $('decline').addEventListener('click', () => void answer(false));
   $('composer').addEventListener('submit', (event) => { event.preventDefault(); void send($('input').value); });

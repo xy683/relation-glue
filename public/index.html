@@ -210,6 +210,28 @@
 <div class="toast" id="toast" role="status"></div>
 <div id="glueModal" class="glue-modal hidden" aria-live="polite"><div class="glue-card" id="glueCard"></div></div>
 
+<!-- 充值确认：先收钱，再由站长确认到账，最后才生成 -->
+<div id="payModal" class="pay-modal hidden" aria-live="polite">
+  <div class="pay-card">
+    <span class="pay-tag">充值确认</span>
+    <h2 id="payTitle">本次生成约消耗 300 万 token</h2>
+    <p class="pay-price" id="payPrice">费用 <b>29.9</b> 元，是否充值？</p>
+    <div id="payStep1" class="pay-actions">
+      <button type="button" class="btn pay-no" id="payNo">否</button>
+      <button type="button" class="btn pay-yes" id="payYes">是</button>
+    </div>
+    <div id="payStep2" class="hidden">
+      <p class="pay-note">请用微信或支付宝扫码支付 <b>29.9</b> 元；付完点下面按钮，站长确认到账后才会开始生成。</p>
+      <div class="pay-qrs">
+        <figure><img src="/pay/wechat.jpg" alt="微信收款码"><figcaption>微信支付</figcaption></figure>
+        <figure><img src="/pay/alipay.jpg" alt="支付宝收款码"><figcaption>支付宝</figcaption></figure>
+      </div>
+      <button type="button" class="btn pay-done" id="payDone">我已完成付款 29.9 元</button>
+      <p class="pay-state" id="payState"></p>
+    </div>
+  </div>
+</div>
+
 <script src="/music.js"></script>
 <script src="/film.js"></script>
 <script src="/app.js"></script>

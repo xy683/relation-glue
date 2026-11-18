@@ -233,3 +233,23 @@ select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-
 .ready-count b { color: var(--coral); font-size: 17px; font-variant-numeric: tabular-nums; margin-left: 6px; }
 /* 成片好了这一屏：把舞台收矮，好让「复制链接」一眼就看见 */
 .stage.compact { max-height: min(38dvh, 340px); }
+
+/* 充值确认 */
+.pay-modal { position: fixed; inset: 0; z-index: 90; background: rgba(8, 6, 10, 0.8); display: flex; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(6px); overflow-y: auto; }
+.pay-card { width: min(94vw, 430px); margin: auto; background: #fffdf9; color: #2b2018; border-radius: 22px; padding: 22px 18px; text-align: center; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+.pay-tag { font-size: 11px; letter-spacing: 3px; color: #9a7bd6; }
+.pay-card h2 { font-size: 19px; margin: 10px 0 8px; line-height: 1.4; }
+.pay-price { font-size: 14px; color: #6b5b50; margin: 0 0 16px; }
+.pay-price b { color: #c0392b; font-size: 23px; margin: 0 2px; }
+.pay-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pay-actions .btn { padding: 13px; }
+.pay-no { background: #efe8e0; color: #6b5b50; box-shadow: none; }
+.pay-yes { background: linear-gradient(135deg, #ffb37a, #ff7a59); color: #2b1206; }
+.pay-note { font-size: 12.5px; color: #6b5b50; line-height: 1.75; margin: 0 0 12px; }
+.pay-note b { color: #c0392b; }
+.pay-qrs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
+.pay-qrs figure { margin: 0; }
+.pay-qrs img { width: 100%; display: block; border-radius: 10px; border: 1px solid #e6ddd3; background: #fff; }
+.pay-qrs figcaption { font-size: 11px; color: #6b5b50; margin-top: 4px; }
+.pay-done { width: 100%; padding: 13px; background: linear-gradient(135deg, #7ad0a0, #3f9d4a); color: #04220f; }
+.pay-state { font-size: 11.5px; color: #9a8a7d; margin: 10px 0 0; line-height: 1.6; min-height: 16px; }

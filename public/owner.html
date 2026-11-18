@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>订单 · 关系复原胶</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #140b18; color: #f3e9e2; font: 15px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  header { padding: 22px 18px 6px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: 1px; }
+  .sub { color: #a9959f; font-size: 12.5px; margin: 6px 0 0; }
+  #list { padding: 14px 14px 40px; display: flex; flex-direction: column; gap: 10px; max-width: 640px; margin: 0 auto; }
+  .order { border: 1px solid #3a2740; background: #1d1222; border-radius: 14px; padding: 13px 14px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .row b { font-size: 15px; }
+  .price { color: #ffb37a; font-weight: 700; font-size: 17px; }
+  .meta { color: #8f7d88; font-size: 11.5px; margin-top: 3px; word-break: break-all; }
+  .st { display: inline-block; margin-top: 8px; font-size: 12px; padding: 2px 9px; border-radius: 999px; background: #2a1c30; color: #d9c6d2; }
+  .order.review .st { background: #3a2a12; color: #ffcf8a; }
+  .order.paid .st { background: #16351f; color: #8ee0a6; }
+  .order.failed .st { background: #3a1618; color: #ff9a9a; }
+  .order.cancelled .st { background: #241d26; color: #9c8c96; }
+  button { margin-top: 10px; margin-right: 8px; padding: 10px 14px; border: 0; border-radius: 10px; background: #3f9d4a; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; border: 1px solid #4a3450; color: #cbb8c3; font-weight: 400; }
+  button:disabled { opacity: 0.5; }
+  .err { color: #ff9a9a; font-size: 12px; margin-top: 8px; word-break: break-all; }
+  .empty { color: #8f7d88; text-align: center; padding: 30px 0; }
+  .note { max-width: 640px; margin: 0 auto; padding: 0 18px; color: #8f7d88; font-size: 11.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>订单 · 关系复原胶</h1>
+  <p class="sub">确认到账之后，服务器才会调模型生成（480P · 30 秒 · 29.9 元/支）</p>
+</header>
+<p class="note">这页只有拿到口令的人能打开。刷新即最新；每 5 秒自动刷新。</p>
+<div id="list"><p class="empty">正在读订单…</p></div>
+<script>
+(function () {
+  const key = new URLSearchParams(location.search).get('key') || '';
+  const list = document.getElementById('list');
+  const label = (s) => ({ awaiting: '待付款', review: '已付款 · 待确认', paid: '已到账 · 生成中', failed: '生成失败', cancelled: '已取消' }[s] || s);
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let busy = false;
+
+  async function act(id, what, btn) {
+    if (busy) return;
+    busy = true;
+    if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
+    try {
+      const r = await fetch('/api/admin/orders/' + id + '/' + what + '?key=' + encodeURIComponent(key), { method: 'POST' });
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) alert(b.error || '没成功');
+    } catch (e) { alert('网络不太好，再试一次'); }
+    busy = false;
+    load();
+  }
+
+  function render(orders) {
+    if (!orders.length) { list.innerHTML = '<p class="empty">还没有订单</p>'; return; }
+    list.innerHTML = orders.map((o) => {
+      const waiting = o.status === 'review' || o.status === 'failed';
+      return '<div class="order ' + esc(o.status) + '">'
+        + '<div class="row"><b>' + esc(o.names.me) + ' · ' + esc(o.names.partner) + '</b><span class="price">¥' + esc(o.amount) + '</span></div>'
+        + '<div class="meta">订单 ' + esc(o.id) + ' · 房间 ' + esc(o.roomId) + ' · ' + esc(new Date(o.at).toLocaleString()) + '</div>'
+        + '<div class="st">' + esc(label(o.status)) + '</div>'
+        + (waiting ? '<button data-act="confirm" data-id="' + esc(o.id) + '">' + (o.status === 'failed' ? '重试生成' : '确认到账并生成') + '</button>' : '')
+        + (o.status === 'review' ? '<button class="ghost" data-act="cancel" data-id="' + esc(o.id) + '">没收到，取消</button>' : '')
+        + (o.error ? '<div class="err">' + esc(o.error) + '</div>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/admin/orders?key=' + encodeURIComponent(key));
+      const b = await r.json().catch(() => ({}));
+      if (!r.ok) { list.innerHTML = '<p class="err">' + esc(b.error || '打不开') + '</p>'; return; }
+      render(b.orders || []);
+    } catch (e) { list.innerHTML = '<p class="err">连不上服务</p>'; }
+  }
+
+  list.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (btn) act(btn.dataset.id, btn.dataset.act, btn);
+  });
+
+  load();
+  setInterval(load, 5000);
+})();
+</script>
+</body>
+</html>
