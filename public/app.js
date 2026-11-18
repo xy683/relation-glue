@@ -486,7 +486,7 @@
         error.textContent = e instanceof Error ? e.message : String(e);
         error.classList.remove('hidden');
         button.disabled = false;
-        button.textContent = '生成回忆闪片';
+        button.textContent = '生成动漫小故事';
       }
     });
   }
@@ -606,7 +606,7 @@
   }
   async function confirmFilm() {
     const story = room.story;
-    if (!story) { toast('先生成一支闪片。'); return; }
+    if (!story) { toast('先生成一支小故事。'); return; }
     const btn = $('makeFilm');
     const st = $('filmState');
     const say = (text) => { if (st) st.textContent = text; };
@@ -624,7 +624,7 @@
       }
       const total = (story.script && story.script.segments ? story.script.segments.length : 3);
       say('正在生成第 1/' + total + ' 段视频…');
-      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script: story.script, musicUrl: story.musicUrl, images: story.images, avatars: story.avatars }) });
+      const jr = await fetch('/api/film-jobs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ script: story.script, storyText: story.storyText, musicUrl: story.musicUrl, images: story.images, avatars: story.avatars }) });
       const jb = await jr.json().catch(() => ({}));
       if (!jr.ok) throw new Error(jb.error || '任务没建成');
       const jobId = jb.id;

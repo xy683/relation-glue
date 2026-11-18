@@ -232,6 +232,7 @@ async function runFilmJob(id, opts) {
       seg.refs = charRefs.concat(bgRefs);
       const prompt = [
         STYLE,
+        opts.storyText ? '故事原文（请按这个画）：' + String(opts.storyText).slice(0, 140) : '',
         '这一镜：' + (seg.scene || '') + '；镜头' + (seg.shot || '缓慢推近') + '；情绪' + (seg.emotion || '温柔') + '。',
         '必须出现两个人（一男一女，形象以人物参考图为准），在画面里做动作、有眼神交流；不要空镜、不要只拍风景、不要火柴人或圆球。',
         seg.excerpt ? '这一镜讲的是：' + seg.excerpt.slice(0, 60) : '',
@@ -653,7 +654,7 @@ const server = createServer(async (req, res) => {
       const id = randomBytes(6).toString('hex');
       const host = String(req.headers.host || 'localhost');
       filmJobs.set(id, { status: 'running', phase: 'script', step: 0, total: 6, url: '', error: '', at: Date.now() });
-      void runFilmJob(id, { key, script: body.script || {}, musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host });
+      void runFilmJob(id, { key, script: body.script || {}, storyText: String(body.storyText ?? ''), musicUrl: String(body.musicUrl ?? ''), images: body.images || [], avatars: body.avatars || [], host });
       return json(res, 200, { id });
     }
     if (path.startsWith('/api/film-jobs/') && req.method === 'GET') {
@@ -828,6 +829,7 @@ const server = createServer(async (req, res) => {
       }
       /* 把脚本直接挂在 story 上，客户端不用再回传聊天记录 */
       story.script = body.storyText ? buildScriptFromStory(String(body.storyText), story.me, story.partner) : buildScript(log, story.me, story.partner, 3);
+      story.storyText = (rawStory || log).slice(0, 1200);
       const id = randomBytes(9).toString('base64url');
       /** @type {Room} */
       const room = {
