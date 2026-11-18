@@ -372,6 +372,9 @@ function publicState(room, now = Date.now()) {
     confirm: room.confirm,
     filmStart: room.filmStart,
     chatEnd: room.chatEnd,
+    offerDeadline: room.offerDeadline || 0,
+    askDeadline: room.askDeadline || 0,
+    result: room.result || '',
     serverNow: now,
     story: Object.assign({}, room.story, { beats: [] }),
     filmUrl: room.filmUrl || '',
@@ -411,8 +414,14 @@ function startChat(room) {
   room.chatEnd = Date.now() + CHAT_MS;
   room.timers.push(setTimeout(() => {
     if (room.status !== 'chat') return;
-    room.status = 'ended';
     room.messages = [];
+    /* 聊天结束：只给发起方 60 秒，可以发起「关系复原胶」 */
+    room.status = 'offer';
+    room.offerDeadline = Date.now() + 60_000;
+    room.result = '';
+    room.timers.push(setTimeout(() => {
+      if (room.status === 'offer') { room.status = 'ended'; tell(room); }
+    }, 60_200));
     tell(room);
   }, CHAT_MS + 200));
   tell(room);
@@ -870,7 +879,7 @@ const server = createServer(async (req, res) => {
       return json(res, 201, { id, hostToken: room.hostToken });
     }
 
-    const open = /^\/api\/rooms\/([A-Za-z0-9_-]{6,32})\/(state|events|join|confirm|message)$/.exec(path);
+    const open = /^\/api\/rooms\/([A-Za-z0-9_-]{6,32})\/(state|events|join|confirm|message|offer|answer)$/.exec(path);
     if (open) {
       const room = roomFor(open[1]);
       if (!room) return json(res, 404, { error: '这间房已经不在了，链接也许过期了。' });
@@ -914,6 +923,38 @@ const server = createServer(async (req, res) => {
         if (room.confirm.host === true && room.confirm.guest === true) startChat(room);
         else tell(room);
         return json(res, 200, { ok: true, status: room.status });
+      }
+
+
+      /* 发起方 60 秒内可以发起「关系复原胶」 */
+      if (action === 'offer' && req.method === 'POST') {
+        const body = await readBody(req);
+        const role = seatOf(room, body.role, body.token);
+        if (!role) return json(res, 403, { error: '这扇门不为这个身份打开。' });
+        if (role !== 'host') return json(res, 403, { error: '只有发起链接的人可以发起复原胶。' });
+        if (room.status !== 'offer') return json(res, 409, { error: '现在不能发起。' });
+        if (Date.now() > (room.offerDeadline || 0)) return json(res, 409, { error: '一分钟已经过去了。' });
+        room.status = 'asking';
+        room.askDeadline = Date.now() + 120_000;
+        room.timers.push(setTimeout(() => {
+          if (room.status === 'asking') { room.result = '好好爱自己，好好生活'; room.status = 'result'; tell(room); }
+        }, 120_200));
+        tell(room);
+        return json(res, 200, { ok: true });
+      }
+
+      /* 接收方 2 分钟内选择 */
+      if (action === 'answer' && req.method === 'POST') {
+        const body = await readBody(req);
+        const role = seatOf(room, body.role, body.token);
+        if (!role) return json(res, 403, { error: '这扇门不为这个身份打开。' });
+        if (role !== 'guest') return json(res, 403, { error: '这一步只能接收方选。' });
+        if (room.status !== 'asking') return json(res, 409, { error: '现在没有在等你选。' });
+        const choice = String(body.choice || '');
+        room.result = choice === 'yes' ? '恭喜重归于好' : choice === 'think' ? '相遇不易，请珍惜彼此' : '好好爱自己，好好生活';
+        room.status = 'result';
+        tell(room);
+        return json(res, 200, { ok: true, result: room.result });
       }
 
       if (action === 'message' && req.method === 'POST') {

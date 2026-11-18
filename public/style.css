@@ -208,3 +208,15 @@ select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-
 .qcheck { display: none; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
 .qcheck small { color: var(--ink-faint); font-size: 10.5px; }
 .film-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #07050a; border-radius: 22px; }
+.glue-modal { position: fixed; inset: 0; z-index: 80; background: rgba(8,6,10,0.72); display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(6px); }
+.glue-card { width: min(92vw, 420px); background: #fffdf9; color: #2b2018; border-radius: 24px; padding: 26px 22px 22px; text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+.glue-card h3 { font-size: 20px; margin: 0 0 10px; }
+.glue-card p { font-size: 13.5px; color: #6b5b50; line-height: 1.7; margin: 0 0 18px; }
+.glue-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.g-btn { flex: 1 1 30%; min-width: 104px; border: 0; border-radius: 14px; padding: 14px 10px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer; }
+.g-btn.yes { background: #3f9d4a; }
+.g-btn.think { background: #e0a52a; }
+.g-btn.no { background: #b23b32; }
+.g-btn[disabled] { opacity: 0.6; }
+.glue-count { margin-top: 14px; font-size: 12px; color: #9a8a7d; }
+.glue-result { font-size: 22px; font-weight: 700; line-height: 1.6; color: #2b2018; }

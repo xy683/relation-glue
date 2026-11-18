@@ -531,10 +531,84 @@
   }
 
   /* ── 状态 ─────────────────────────────────────────── */
+  /* 关系复原胶：只有发起方能发起；接收方三选一 */
+  let glueTimer = 0;
+  async function glueAction(action, payload) {
+    try {
+      const res = await fetch('/api/rooms/' + room.id + '/' + action, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(Object.assign({ role: room.role, token: room.token }, payload || {})),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) toast(body.error || '没成功');
+      return res.ok;
+    } catch (e) { toast('网络不太好，再试一次'); return false; }
+  }
+  function renderGlue(state) {
+    const modal = $('glueModal');
+    const card = $('glueCard');
+    if (!modal || !card) return;
+    const st = state.status;
+    if (st !== 'offer' && st !== 'asking' && st !== 'result') {
+      clearInterval(glueTimer);
+      modal.classList.add('hidden');
+      return;
+    }
+    modal.classList.remove('hidden');
+    clearInterval(glueTimer);
+    const isHost = room.role === 'host';
+    const left = (deadline) => Math.max(0, Math.ceil((deadline - (Date.now() + room.offset)) / 1000));
+    if (st === 'offer') {
+      if (isHost) {
+        card.innerHTML = '<h3>要使用关系复原胶吗？</h3><p>把裂开的关系重新粘好，再给彼此一次机会</p>'
+          + '<div class="glue-actions"><button class="g-btn yes" id="glueOffer">使用复原胶</button></div>'
+          + '<div class="glue-count" id="glueCount"></div>';
+        const btn = $('glueOffer');
+        if (btn) btn.onclick = async () => { btn.disabled = true; await glueAction('offer'); };
+      } else {
+        card.innerHTML = '<h3>等一等</h3><p>发起人正在决定，要不要用复原胶。</p>';
+      }
+      const tick = () => {
+        const el = $('glueCount');
+        if (el) el.textContent = '还剩 ' + left(state.offerDeadline || 0) + ' 秒';
+      };
+      tick();
+      glueTimer = setInterval(tick, 1000);
+      return;
+    }
+    if (st === 'asking') {
+      if (isHost) {
+        card.innerHTML = '<h3>等对方回应</h3><p>TA 有两分钟时间选择。</p>';
+      } else {
+        card.innerHTML = '<h3>要使用关系复原胶吗？</h3><p>把裂开的关系重新粘好，再给彼此一次机会</p>'
+          + '<div class="glue-actions">'
+          + '<button class="g-btn yes" data-choice="yes">使用复原胶</button>'
+          + '<button class="g-btn think" data-choice="think">考虑考虑</button>'
+          + '<button class="g-btn no" data-choice="no">暂不修复</button>'
+          + '</div><div class="glue-count" id="glueCount"></div>';
+        card.querySelectorAll('[data-choice]').forEach((b) => {
+          b.onclick = async () => {
+            card.querySelectorAll('[data-choice]').forEach((x) => { x.disabled = true; });
+            await glueAction('answer', { choice: b.dataset.choice });
+          };
+        });
+      }
+      const tick2 = () => {
+        const el = $('glueCount');
+        if (el) el.textContent = '还剩 ' + left(state.askDeadline || 0) + ' 秒';
+      };
+      tick2();
+      glueTimer = setInterval(tick2, 1000);
+      return;
+    }
+    card.innerHTML = '<div class="glue-result">' + String(state.result || '好好爱自己，好好生活') + '</div>';
+  }
   function apply(state) {
     if (!state) return;
     /* 房间里已经有成片地址：两个人看同一支视频 */
     if (state.filmUrl) filmDone(state.filmUrl);
+    renderGlue(state);
     const wasChat = room.state?.status === 'chat';
     room.state = state;
     room.offset = state.serverNow - Date.now();
