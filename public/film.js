@@ -504,17 +504,21 @@ function drawScene(ctx, w, h, story, i, local, t, photos, cuts, total) {
   ctx.fill();
 
   /* 弧线连接两个人 */
-  const leftX = sw * 0.24;
-  const rightX = sw * 0.76;
+  const tone = (story.acts && story.acts[i] && story.acts[i].tone) || 'warm';
+  const spread = tone === 'break' ? 0.12 : tone === 'cool' ? 0.18 : 0.24;
+  const leftX = sw * spread;
+  const rightX = sw * (1 - spread);
   const peopleY = groundY - 30;
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,120,190,0.8)';
+  const arcColor = tone === 'break' ? 'rgba(255,110,110,0.7)' : tone === 'cool' ? 'rgba(130,175,255,0.75)' : 'rgba(255,120,190,0.85)';
+  ctx.strokeStyle = arcColor;
   ctx.lineWidth = 3;
-  ctx.shadowColor = 'rgba(255,120,190,0.8)';
+  ctx.shadowColor = arcColor;
+  ctx.setLineDash(tone === 'break' ? [14, 16] : []);
   ctx.shadowBlur = 18;
   ctx.beginPath();
   ctx.moveTo(leftX, peopleY - 60);
-  ctx.quadraticCurveTo(sw / 2, peopleY - 240, rightX, peopleY - 60);
+  ctx.quadraticCurveTo(sw / 2, peopleY - (tone === 'break' ? 120 : 240), rightX, peopleY - 60);
   ctx.stroke();
   ctx.restore();
 

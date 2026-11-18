@@ -400,6 +400,23 @@ const server = createServer(async (req, res) => {
       if (mode === 'plain') story.music = { root: 'A', tempo: 68, mood: 'warm', theme };
       else if (story.music) story.music.theme = theme;
       story.mode = mode;
+      /* 从聊天记录里读情绪的走向：越往后是热恋还是崩，决定分镜的标题和画面冷暖 */
+      const conflictHits = (log.match(/(分手|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见)/g) || []).length;
+      const warmHits = (log.match(/(想你|抱抱|喜欢|爱你|晚安|早安|开心|想你啦|么么|宝贝)/g) || []).length;
+      const lateLines = log.split(String.fromCharCode(10));
+      const lateText = lateLines.slice(Math.floor(lateLines.length * 0.6)).join(' ');
+      const lateConflict = /(分手|吵架|冷战|拉黑|删了|不理|生气|失望|算了|随便你|别联系|再见)/.test(lateText);
+      story.arc = (lateConflict || (conflictHits >= 2 && conflictHits >= warmHits)) ? 'break' : 'warm';
+      story.acts.forEach((act, idx) => {
+        const late = idx >= 3;
+        act.tone = story.arc === 'break' && late ? 'break' : (late && conflictHits ? 'cool' : 'warm');
+      });
+      if (mode !== 'agent') {
+        const warmTitles = [['初见', '第一句话，总是很轻'], ['靠近', '消息开始密起来'], ['热恋', '把一整天都讲给对方听'], ['习惯', '安静也算陪着'], ['回望', '还是记得第一句']];
+        const breakTitles = [['初见', '那天，我先开了口'], ['靠近', '后来就开始等消息'], ['疏远', '回复越来越慢'], ['分开', '有些话停在了对话框'], ['回望', '如果还能再说一次在吗']];
+        const set = story.arc === 'break' ? breakTitles : warmTitles;
+        story.acts.forEach((act, idx) => { act.title = set[idx][0]; act.note = set[idx][1]; });
+      }
       const musicUrl = typeof body.musicUrl === 'string' && /^[/]music[/][A-Za-z0-9._-]+[.][A-Za-z0-9]+$/.test(body.musicUrl) ? body.musicUrl : '';
       story.musicUrl = musicUrl;
       story.beats = Array.isArray(body.beats)
