@@ -1267,6 +1267,8 @@
     const box = $('intro');
     const v = $('introVideo');
     if (!box || !v) return;
+    /* 只在首页播；进房间/别人的邀请链接直接跳过 */
+    if (location.pathname !== '/' && location.pathname !== '/index.html') { box.style.display = 'none'; return; }
     let closed = false;
     const finish = () => {
       if (closed) return;
