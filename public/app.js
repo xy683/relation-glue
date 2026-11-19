@@ -641,7 +641,7 @@
     room.offset = state.serverNow - Date.now();
     if (state.story) room.story = state.story;
     /* 成片地址一出现：先装好画面，不自动播放 —— 等接收人进来，或者等满两分钟 */
-    if (state.filmUrl) loadFilm(state.filmUrl);
+    if (state.filmUrl) { loadFilm(state.filmUrl); closePay(); }
     renderGlue(state);
     const wasChat = room.state?.status === 'chat';
     room.state = state;
@@ -651,7 +651,7 @@
     if (state.order && room.role === 'host' && !state.filmUrl && state.order.status === 'review') {
       showPayWaiting('review');
     }
-    if (state.order && room.role === 'host' && !state.filmUrl && state.order.status === 'paid') {
+    if (state.order && room.role === 'host' && !state.filmUrl && state.order.status === 'paid' && !state.order.used) {
       if (state.status === 'film') { showGenerating(); startPayWatch(); } else { showNotice(); }
     }
 

@@ -330,6 +330,7 @@ async function pushPaid(room) {
 }
 /** 站长确认到账：这里才开始花钱调模型 */
 function beginPaidFilm(room) {
+  if (room && room.filmUrl) return '';
   if (room && room.order && room.order.jobId) {
     const running = filmJobs.get(room.order.jobId);
     if (running && running.status === 'running') return room.order.jobId;
@@ -344,6 +345,7 @@ function beginPaidFilm(room) {
   filmJobs.set(jobId, { status: 'running', phase: 'script', step: 0, total: 3, url: '', error: '', at: Date.now() });
   room.order.status = 'paid';
   room.order.paidAt = Date.now();
+  room.order.used = true;
   room.order.jobId = jobId;
   void runFilmJob(jobId, {
     key: OWNER_KEY,
@@ -645,6 +647,7 @@ async function runFilmJob(id, opts) {
       if (room && room.order && room.order.status === 'paid') {
         room.order.status = 'failed';
         room.order.error = job.error;
+        room.order.used = false;
         /* 失败就退回待处理：后台可以点重试，不会重复收钱 */
         room.status = 'waiting';
         tell(room);
@@ -710,7 +713,7 @@ function publicState(room, now = Date.now()) {
     serverNow: now,
     story: Object.assign({}, room.story, { beats: [] }),
     filmUrl: room.filmUrl || '',
-    order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status, error: room.order.error || '' } : null,
+    order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status, error: room.order.error || '', used: Boolean(room.order.used) } : null,
     payXunhu: Boolean(XUNHU || ZHIFU),
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
   };
@@ -1435,8 +1438,9 @@ const server = createServer(async (req, res) => {
         const role = seatOf(room, body.role, body.token);
         if (role !== 'host') return json(res, 403, { error: '只有发起链接的人可以确认。' });
         if (!room.order || room.order.status !== 'paid') return json(res, 409, { error: '还没确认到账。' });
-        if (room.filmUrl) return json(res, 200, { ok: true });
-        if (room.status === 'film') return json(res, 200, { ok: true, running: true });
+        if (room.filmUrl) return json(res, 200, { ok: true, already: true });
+        if (room.order.used) return json(res, 200, { ok: true, already: true });
+        if (room.status !== 'waiting') return json(res, 200, { ok: true, already: true });
         beginPaidFilm(room);
         return json(res, 200, { ok: true, orderId: room.order.id });
       }
