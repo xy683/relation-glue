@@ -782,12 +782,35 @@
   }
 
   /** 一起看：t 由房间里同一个开始时刻算出来，晚进来的人也能接上 */
+  /* 先把片子下成 blob 再播：绕开部分安卓浏览器对 http 视频的劫持/嗅探 */
+  const filmBlobs = new Map();
+  async function filmBlobUrl(url) {
+    if (filmBlobs.has(url)) return filmBlobs.get(url);
+    try {
+      const res = await fetch(url, { cache: 'force-cache' });
+      if (!res.ok) return '';
+      const blob = await res.blob();
+      if (!blob.size) return '';
+      const obj = URL.createObjectURL(blob);
+      filmBlobs.set(url, obj);
+      return obj;
+    } catch (e) { return ''; }
+  }
+
   async function playFilm(state) {
     const video = $('filmVideo');
     if (!video || !state.filmUrl) return;
     stopFilm();
     clearInterval(room.readyTick);
-    loadFilm(state.filmUrl);
+    const blobUrl = await filmBlobUrl(state.filmUrl);
+    if (blobUrl) {
+      video.src = blobUrl;
+      video.classList.remove('hidden');
+      try { video.load(); } catch (e) { /* 忽略 */ }
+      room.filmSrc = blobUrl;
+    } else {
+      loadFilm(state.filmUrl);
+    }
     const from = Math.max(0, ((Date.now() + room.offset) - state.filmStart) / 1000);
     const seek = () => { try { video.currentTime = from; } catch (e) { /* 忽略 */ } };
     if (video.readyState >= 1) seek();
