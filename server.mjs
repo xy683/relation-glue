@@ -592,7 +592,7 @@ async function runFilmJob(id, opts) {
     const xargs = ['-y'];
     outs.forEach((f, k) => {
       xargs.push('-i', f);
-      graph.push('[' + k + ':v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,fps=30,setsar=1,format=yuv420p[v' + k + ']');
+      graph.push('[' + k + ':v]scale=480:854:force_original_aspect_ratio=increase,crop=480:854,fps=30,setsar=1,format=yuv420p[v' + k + ']');
     });
     if (hasBgm) xargs.push('-i', bgm);
     let vout = 'v0';
@@ -615,7 +615,7 @@ async function runFilmJob(id, opts) {
       writeFileSync(list, outs.map((f) => "file '" + f.replace(/'/g, "'\\''") + "'").join('\n'));
       const sargs = ['-y', '-f', 'concat', '-safe', '0', '-i', list];
       if (hasBgm) sargs.push('-i', bgm);
-      let vf = 'fps=30,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1';
+      let vf = 'fps=30,scale=480:854:force_original_aspect_ratio=increase,crop=480:854,setsar=1';
       if (font) vf += ',subtitles=subs.ass';
       sargs.push('-vf', vf);
       if (hasBgm) sargs.push('-map', '0:v', '-map', '1:a', '-af', 'apad', '-shortest', '-c:a', 'aac', '-b:a', '192k');
