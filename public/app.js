@@ -756,14 +756,24 @@
     if (video.readyState >= 1) seek();
     else video.addEventListener('loadedmetadata', seek, { once: true });
     video.muted = false;
+    const btn = $('filmPlay');
+    const playNow = async () => {
+      video.muted = false;
+      seek();
+      try { await video.play(); } catch (e) { /* 忽略 */ }
+      if (btn) { btn.classList.add('hidden'); btn.onclick = null; }
+    };
+    if (btn) {
+      btn.classList.remove('hidden');
+      btn.textContent = '▶ 播放（有声音）';
+      btn.onclick = () => void playNow();
+    }
+    /* 能带声音自动播就直接播；被浏览器拦下就等用户点一下大按钮（保证有声音） */
     try {
       await video.play();
+      if (btn) { btn.classList.add('hidden'); btn.onclick = null; }
     } catch (e) {
-      /* 浏览器不让带声音自动播：先静音播，按钮在，一点就开声音 */
-      video.muted = true;
-      try { await video.play(); } catch (e2) { /* 忽略 */ }
-      const btn = $('soundBtn');
-      if (btn) { btn.textContent = '🔇 点一下开声音'; btn.classList.remove('on'); }
+      if (btn) btn.classList.remove('hidden');
     }
   }
 

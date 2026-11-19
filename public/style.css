@@ -265,3 +265,6 @@ select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-
 .pay-notice-tag { margin: 0 0 8px; font-size: 11px; letter-spacing: 2px; color: #b3763f; }
 .pay-notice .pay-note { margin: 0 0 12px; }
 .pay-notice .pay-yes { width: 100%; padding: 12px; }
+
+.film-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; padding: 14px 26px; border-radius: 999px; border: 0; background: linear-gradient(135deg, #ffb37a, #ff7a59); color: #2b1206; font-size: 15px; font-weight: 700; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); cursor: pointer; }
+
