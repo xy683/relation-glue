@@ -693,9 +693,10 @@ async function runOcr(image, out) {
 }
 
 function serveStatic(req, res, pathname) {
-  if (pathname.startsWith('/outputs/')) {
-    const outDir = join(HERE, 'outputs');
-    const name = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '').replace(/^outputs[/\\]+/, '');
+  if (pathname.startsWith('/outputs/') || pathname.startsWith('/films/')) {
+    const isFilm = pathname.startsWith('/films/');
+    const outDir = isFilm ? join(PUBLIC, 'films') : join(HERE, 'outputs');
+    const name = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '').replace(/^(outputs|films)[/\\]+/, '');
     const file = resolve(outDir, name);
     if (!file.startsWith(outDir + sep) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
     const size = statSync(file).size;
