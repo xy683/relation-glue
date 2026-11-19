@@ -468,8 +468,7 @@ async function runFilmJob(id, opts) {
       const themed = join(HERE, 'public', 'bgm', themeName + '.mp3');
       bgmFile = existsSync(themed) ? themed : '';
     }
-    /* 付完款先等 10 秒，再把这一主题的专属片子放出来 */
-    await new Promise((ok) => setTimeout(ok, 10_000));
+    /* 付完款直接把这一主题的专属片子放出来（不再等待、不再生成） */
     const picked = ['family', 'love', 'friend'].includes(String(story.kind)) ? String(story.kind) : 'love';
     const filmFile = join(HERE, 'public', 'films', picked + '.mp4');
     if (!existsSync(filmFile)) throw new Error('这一支专属片子还没上传');
