@@ -654,7 +654,7 @@ function publicState(room, now = Date.now()) {
     serverNow: now,
     story: Object.assign({}, room.story, { beats: [] }),
     filmUrl: room.filmUrl || '',
-    order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status } : null,
+    order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status, error: room.order.error || '' } : null,
     payXunhu: Boolean(XUNHU || ZHIFU),
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
   };
