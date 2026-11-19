@@ -1247,6 +1247,20 @@
   $('midYes')?.addEventListener('click', () => { pendingAnswer = 'yes'; hideMidAsk(); });
   $('midNo')?.addEventListener('click', () => { pendingAnswer = 'no'; hideMidAsk(); });
   $('midLater')?.addEventListener('click', () => { pendingAnswer = 'ask'; hideMidAsk(); });
+  /* 常驻监听：视频滑到一半/结尾就弹（不依赖 playFilm 是否被调用） */
+  try {
+    const fv = $('filmVideo');
+    const midTick = () => {
+      if (!fv) return;
+      const st = room.state || {};
+      if (st.status !== 'film') return;
+      const d = (Number.isFinite(fv.duration) && fv.duration > 1) ? fv.duration : (Number(st.filmMs) || 0) / 1000;
+      if (!(d > 1)) return;
+      if (fv.currentTime >= d * 0.5) { showMidAsk(true); tellMid(); }
+    };
+    ['timeupdate', 'seeked', 'ended', 'loadedmetadata'].forEach((n) => fv && fv.addEventListener(n, midTick));
+  } catch (e) { /* 忽略 */ }
+
   $('payNoticeOk')?.addEventListener('click', () => void acceptNotice());
   $('accept').addEventListener('click', () => void answer(true));
   $('decline').addEventListener('click', () => void answer(false));
