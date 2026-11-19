@@ -563,6 +563,7 @@ function publicState(room, now = Date.now()) {
     serverNow: now,
     story: Object.assign({}, room.story, { beats: [] }),
     filmUrl: room.filmUrl || '',
+    midAsk: Boolean(room.midAsk && room.status === 'film'),
     order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status, error: room.order.error || '', used: Boolean(room.order.used), needsConsent: Boolean(room.order.status === 'paid' && !room.order.used && !room.filmUrl && room.status === 'waiting') } : null,
     payXunhu: Boolean(XUNHU || ZHIFU),
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
@@ -606,6 +607,11 @@ function startFilmWindow(room, reason = 'guest') {
   room.filmStart = Date.now();
   room.filmReason = reason;
   room.readyDeadline = 0;
+  room.midAsk = false;
+  const totalMs = Number(room.filmMs) > 3000 ? Number(room.filmMs) : FILM_WINDOW_MS;
+  room.timers.push(setTimeout(() => {
+    if (room.status === 'film') { room.midAsk = true; tell(room); }
+  }, Math.max(3000, Math.floor(totalMs / 2))));
   const windowMs = (Number(room.filmMs) > 3000 ? Number(room.filmMs) : FILM_WINDOW_MS) + 300; /* 视频多长就多长 */
   room.timers.push(setTimeout(() => {
     if (room.status === 'film') { room.status = 'confirm'; tell(room); }

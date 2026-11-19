@@ -687,6 +687,7 @@
       pauseFilm();
       updateReady(state);
     } else if (state.status === 'film') {
+      if (state.midAsk) showMidAsk();
       show('film');
       /* 每次新的观影窗口：两边都从头播同一支视频 */
       if (room.lastFilmStart !== state.filmStart) {
@@ -711,6 +712,7 @@
       pauseFilm();
       stopFilm();
       show('chat');
+      if (!wasChat) startChatBgm();
       if (!wasChat) { room.seen.clear(); $('messages').querySelectorAll('.msg').forEach((n) => n.remove()); }
       for (const message of state.messages) push(message, true);
       startClock(state);
@@ -1109,7 +1111,6 @@
     if (!a) return;
     a.volume = 0.42;
     a.loop = true;
-    try { a.load(); } catch (e) { /* 忽略 */ }
     const tryPlay = () => { try { const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) { /* 忽略 */ } };
     tryPlay();
     /* 浏览器拦了自动播放：之后任何一次点击/触摸/按键都再试一次，直到响起来 */
