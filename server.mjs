@@ -370,7 +370,7 @@ const NEGATIVE = '避免出现：人脸扭曲、五官错乱、肢体畸形、�
 const filmQuota = new Map();
 const rooms = new Map();
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.mp4': 'video/mp4' };
 
 /* 没传头像时：生成一张固定的「默认男女主」Q 版参考图，之后所有片子都用它锁形象 */
 async function ensureDefaultCouple(key) {
