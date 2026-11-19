@@ -898,7 +898,8 @@ const server = createServer(async (req, res) => {
       }
     }    /* 真人照片 → Q 版：用使用者自己的 Key 调 Seedream 图生图 */
     if (path === '/api/qstyle' && req.method === 'POST') {
-      const key = String(req.headers['x-agent-key'] || '').trim() || OWNER_KEY;
+      /* 只能用使用者自己的 Key：绝不能在付款前动用站长的火山额度 */
+      const key = String(req.headers['x-agent-key'] || '').trim();
       if (!key) return json(res, 400, { error: '需要你自己的豆包 Key。' });
       const bytes = await readImage(req, 12 * 1024 * 1024);
       if (!bytes.length) return json(res, 400, { error: '图片是空的。' });
@@ -1146,22 +1147,13 @@ const server = createServer(async (req, res) => {
       story.avatars = avatars
         .filter((src) => typeof src === 'string' && (src.indexOf('data:image/') === 0 || src.indexOf('/qstyle/') === 0) && src.length < 400000)
       if (mode === 'agent') {
-        /* 请豆包当导演：它给分镜、颜色、音乐的性格；画面与声音还是本地的 */
-        const userKey = String(body.agentKey ?? '').trim();
-        const agentId = String(body.agentId ?? '').trim();
-        if (!userKey) {
-          story.fromAgent = false;
-          story.agentNote = '没填 Key，先按本地的来';
-        } else {
-          const result = await designFilm(userKey, log, { me: story.me, partner: story.partner }, agentId, String(body.agentModel ?? ''));
-          const spec = result.spec;
-          const designed = spec ?? localDesign(story.seed, story.stats);
-          story.fromAgent = Boolean(spec);
-          story.agentNote = spec ? (agentId ? '豆包智能体定制' : '豆包定制') : (result.error ? ('豆包：' + result.error) : '没填 Key，先按本地的来');
-          designed.acts.forEach((a, idx) => { if (story.acts[idx]) { story.acts[idx].title = a.title; story.acts[idx].note = a.note; } });
-          story.palette = designed.palette;
-          story.music = designed.music;
-        }
+        /* 付款前绝不调用任何火山模型：分镜、配色、音乐全部本地生成 */
+        const designed = localDesign(story.seed, story.stats);
+        story.fromAgent = false;
+        story.agentNote = '本地定制';
+        designed.acts.forEach((a, idx) => { if (story.acts[idx]) { story.acts[idx].title = a.title; story.acts[idx].note = a.note; } });
+        story.palette = designed.palette;
+        story.music = designed.music;
       }
       /* 把脚本直接挂在 story 上，客户端不用再回传聊天记录 */
       story.script = body.storyText ? buildScriptFromStory(String(body.storyText), story.me, story.partner) : buildScript(log, story.me, story.partner, 3);
