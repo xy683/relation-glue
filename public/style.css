@@ -286,3 +286,10 @@ select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-
 .pay-card.generating .pay-fallback,
 .pay-card.generating .pay-notice { display: none !important; }
 
+
+.ask { margin: 0 0 12px; font-size: 15px; color: #2b2018; font-weight: 600; }
+.kinds { display: grid; gap: 10px; margin: 0 0 10px; }
+.kind { display: flex; align-items: baseline; gap: 10px; padding: 14px 16px; border-radius: 14px; border: 1px solid #e8dccd; background: #fffdf9; cursor: pointer; text-align: left; font: inherit; color: #2b2018; transition: all .15s; }
+.kind b { font-size: 16px; }
+.kind span { font-size: 12px; color: #8a7a6c; }
+.kind.on { border-color: #ff7a59; box-shadow: 0 0 0 2px rgba(255,122,89,.18); background: #fff7f1; }

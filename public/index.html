@@ -47,10 +47,16 @@
     </div>
     
     <form id="create" class="card" autocomplete="off">
-      <div class="field">
-        <label for="log">你们的小故事 <small>你写的这段文字，会直接变成视频的提示词</small></label>
-        <textarea id="log" required placeholder="和谁，什么时候相遇；一起经历过什么小事；让你最感动的事是什么；你们是因为什么闹掰的。说得越详细，效果越好（亲情、友情、爱情都可以）。&#10;&#10;例：2019 年秋天，我在上海认识了她。那天她借了我一把伞……后来我们因为一次误会慢慢走散了。"></textarea>
-        <p class="hint">模板：和谁 · 什么时候相遇 · 一起经历过的小事 · 最感动的事 · 因为什么分开（写得越具体，片子越像你们）</p>
+            <div class="field">
+        <label>说你想修复 <small>说你想使用关系复原胶修复什么？</small></label>
+        <p class="ask">说你想使用关系复原胶修复什么？</p>
+        <div class="kinds" id="kinds">
+          <button type="button" class="kind" data-kind="family"><b>亲情</b><span>和父母、亲人之间</span></button>
+          <button type="button" class="kind" data-kind="love"><b>爱情</b><span>和恋人、爱人之间</span></button>
+          <button type="button" class="kind" data-kind="friend"><b>友情</b><span>和朋友、兄弟之间</span></button>
+        </div>
+        <p class="hint">选一个，付完款后会播放这一支专属片子。</p>
+        <textarea id="log" class="hidden" aria-hidden="true"></textarea>
       </div>
 
       <div class="field">

@@ -481,10 +481,14 @@ async function runFilmJob(id, opts) {
       const themed = join(HERE, 'public', 'bgm', themeName + '.mp3');
       bgmFile = existsSync(themed) ? themed : '';
     }
-    const out = await renderFilm(story, { ffmpeg, fontName, bgmFile, outDir: join(HERE, 'outputs') });
+    /* 付完款先等 10 秒，再把这一主题的专属片子放出来 */
+    await new Promise((ok) => setTimeout(ok, 10_000));
+    const picked = ['family', 'love', 'friend'].includes(String(story.kind)) ? String(story.kind) : 'love';
+    const filmFile = join(HERE, 'public', 'films', picked + '.mp4');
+    if (!existsSync(filmFile)) throw new Error('这一支专属片子还没上传');
     job.phase = 'done';
     job.status = 'done';
-    job.url = '/outputs/' + out.id + '.mp4';
+    job.url = '/films/' + picked + '.mp4';
     if (opts.roomId) {
       const r = rooms.get(opts.roomId);
       if (r && r.status !== 'chat' && r.status !== 'ended') {
@@ -1022,6 +1026,7 @@ const server = createServer(async (req, res) => {
       if (log.length < 20) return json(res, 400, { error: '记录太短了，多贴几句吧。' });
       if (log.length > 60_000) return json(res, 400, { error: '记录有点长，先贴最近的一段吧。' });
       const mode = body.mode === 'agent' ? 'agent' : 'plain';
+      const kind = ['family', 'love', 'friend'].includes(String(body.kind)) ? String(body.kind) : 'love';
       const theme = ['miss', 'warm', 'regret'].includes(String(body.theme)) ? String(body.theme) : 'miss';
       let story;
       try { story = analyze(log, { me: String(body.me ?? '').slice(0, 24), partner: String(body.partner ?? '').slice(0, 24) }); }
@@ -1034,6 +1039,7 @@ const server = createServer(async (req, res) => {
       /* 普通模式固定 30 秒；智能体模式按信息密度 15 秒到 3 分钟 */
       story.duration = 30000;
       story.theme = theme;
+      story.kind = kind;
       if (mode === 'plain') story.music = { root: 'A', tempo: 68, mood: 'warm', theme };
       else if (story.music) story.music.theme = theme;
       story.mode = mode;
@@ -1089,6 +1095,18 @@ const server = createServer(async (req, res) => {
       return json(res, 201, { id, hostToken: room.hostToken });
     }
 
+    /* 站长上传三种主题的专属片子 */
+    if (path === '/api/admin/film' && req.method === 'POST') {
+      if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
+      const kind = String(req.headers['x-kind'] || '');
+      if (!['family', 'love', 'friend'].includes(kind)) return json(res, 400, { error: '不认识这个主题。' });
+      const bytes = await readImage(req, 80 * 1024 * 1024);
+      if (!bytes.length) return json(res, 400, { error: '文件是空的。' });
+      const dir = join(PUBLIC, 'films');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, kind + '.mp4'), bytes);
+      return json(res, 200, { ok: true, bytes: bytes.length });
+    }
     /* 站长上传幻境聊天背景音乐（一次性，管理员口令） */
     if (path === '/api/admin/bgm' && req.method === 'POST') {
       if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });

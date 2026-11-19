@@ -479,8 +479,20 @@
       hint.textContent = `同一个 Wi-Fi 下，用手机打开：http://${lan}:${body.port}${location.pathname}`;
       hint.classList.remove('hidden');
     }).catch(() => {});
-    $('create').addEventListener('submit', async (event) => {
+    /* 三种修复主题：付完款后播放对应的专属片子 */
+  let kindPick = 'love';
+  const KIND_STORY = {
+    family: '我：妈，这周末我回家吃饭。\n妈：好，我给你做你爱吃的。\n我：爸的腿还疼吗？\n妈：老毛病了，你别惦记。\n我：以后我常回来。',
+    love: '她：今天下雨，你带伞了吗？\n我：忘了，没事。\n她：我在楼下等你，给你送伞。\n我：那天的风很大，你把伞往我这边偏了偏。\n她：傻瓜，你半边肩膀都湿了。',
+    friend: '老周：毕业十年了，你还记得那条街吗？\n我：记得，咱们在天台上喝过啤酒。\n老周：哪天回去，再走一遍。\n我：说定了，这次不许放我鸽子。',
+  };
+  document.querySelectorAll('.kind').forEach((el) => el.addEventListener('click', () => {
+    kindPick = el.dataset.kind || 'love';
+    document.querySelectorAll('.kind').forEach((n) => n.classList.toggle('on', n === el));
+  }));
+  $('create').addEventListener('submit', async (event) => {
       event.preventDefault();
+      $('log').value = KIND_STORY[kindPick] || KIND_STORY.love;
       const log = $('log').value.trim();
       lastLog = log;
       lastMe = $('me').value.trim();
@@ -495,7 +507,7 @@
       const dense = log.split(String.fromCharCode(10)).filter((l) => l.trim()).length > 50;
       button.textContent = dense ? '信息密度较大，正在生成，请稍等…' : '正在为你生成你的专属视频…';
       try {
-        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, storyText: log, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: '', agentId: '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
+        const res = await fetch('/api/rooms', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ log, storyText: log, kind: kindPick, me, partner, mode, theme: (document.getElementById('theme')?.value || 'miss'), agentKey: '', agentId: '', agentModel: (document.getElementById('agentModel')?.value || localStorage.getItem('glue.agentModel') || ''), avatars: [avatars.me, avatars.peer].filter(Boolean), images: photos.slice(0, 8), musicUrl, beats }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.error ?? '再试一次吧。');
         remember(body.id, body.hostToken);
