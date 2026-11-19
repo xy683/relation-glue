@@ -639,9 +639,12 @@
     room.state = state;
     $('names').innerHTML = `<i>${escape0(state.names.me)}</i> &nbsp;·&nbsp; <u>${escape0(state.names.partner)}</u>`;
 
-    /* 付款状态：待确认 / 已确认到账时，把充值弹窗留在原位并继续等 */
-    if (state.order && room.role === 'host' && !state.filmUrl && (state.order.status === 'review' || state.order.status === 'paid')) {
-      showPayWaiting(state.order.status);
+    /* 付款状态：已到账 → 先出服务须知；确认后才开始生成 */
+    if (state.order && room.role === 'host' && !state.filmUrl && state.order.status === 'review') {
+      showPayWaiting('review');
+    }
+    if (state.order && room.role === 'host' && !state.filmUrl && state.order.status === 'paid') {
+      if (state.status === 'film') { showGenerating(); startPayWatch(); } else { showNotice(); }
     }
 
     if (state.status === 'waiting') {
@@ -806,6 +809,7 @@
     if (modal) modal.classList.add('hidden');
     clearInterval(payPoll);
     payWatching = false;
+    noticeOpen = false;
   }
   async function payYes() {
     $('payStep1').classList.add('hidden');
@@ -857,8 +861,46 @@
     $('payStep1').classList.add('hidden');
     $('payStep2').classList.remove('hidden');
     const el = $('payState');
-    if (el) el.textContent = status === 'paid' ? '已到账，正在生成（480P · 30 秒）…' : '等待到账…付款后会自动开始。';
+    if (el) el.textContent = status === 'review' ? '已收到你的付款提示，正在核对到账…' : '等待到账…付款后会自动开始。';
     startPayWatch();
+  }
+  let noticeOpen = false;
+  /** 已到账：先让客户看服务须知，确认后才开始烧算力 */
+  function showNotice() {
+    if (noticeOpen) return;
+    noticeOpen = true;
+    const modal = $('payModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    $('payStep1').classList.add('hidden');
+    $('payStep2').classList.remove('hidden');
+    const ch = document.querySelector('.pay-channels'); if (ch) ch.classList.add('hidden');
+    const qrs = document.querySelector('.pay-qrs'); if (qrs) qrs.classList.add('hidden');
+    const fb = document.querySelector('.pay-fallback'); if (fb) fb.classList.add('hidden');
+    const nt = $('payNotice'); if (nt) nt.classList.remove('hidden');
+    $('payState').textContent = '';
+    clearInterval(payPoll); payWatching = false;
+  }
+  function showGenerating(text) {
+    noticeOpen = true;
+    const nt = $('payNotice'); if (nt) nt.classList.add('hidden');
+    const el = $('payState');
+    if (el) el.textContent = text || '视频正在生成中，由于使用人数过多，请耐心等待…';
+  }
+  async function acceptNotice() {
+    showGenerating('视频正在生成中，由于使用人数过多，请耐心等待…');
+    try {
+      const res = await fetch(`/api/rooms/${room.id}/start`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role: room.role, token: room.token }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || '启动失败');
+      startPayWatch();
+    } catch (e) {
+      const el = $('payState');
+      if (el) el.textContent = e instanceof Error ? e.message : '启动失败';
+    }
   }
   function startPayWatch() {
     if (payWatching) return;
@@ -871,7 +913,12 @@
       const el = $('payState');
       if (s.filmUrl) { closePay(); apply(s); return; }
       const st = s.order && s.order.status;
-      if (st === 'paid') { if (el) el.textContent = '已到账，正在生成（480P · 30 秒）…'; return; }
+      if (st === 'paid') {
+        if (s.status === 'film' || noticeOpen) showGenerating();
+        else showNotice();
+        return;
+      }
+      if (st === 'review') { if (el) el.textContent = '已收到你的付款提示，正在核对到账…'; return; }
       if (st === 'cancelled') {
         clearInterval(payPoll); payWatching = false;
         if (el) el.textContent = '这笔订单被取消了。如果你已经付过款，请点上面的链接联系站长。';
@@ -1039,6 +1086,7 @@
   $('payDone')?.addEventListener('click', (e) => { e.preventDefault(); void payDone(); });
   $('payAlipay')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('alipay'); });
   $('payWechat')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('wechat'); });
+  $('payNoticeOk')?.addEventListener('click', () => void acceptNotice());
   $('accept').addEventListener('click', () => void answer(true));
   $('decline').addEventListener('click', () => void answer(false));
   $('composer').addEventListener('submit', (event) => { event.preventDefault(); void send($('input').value); });

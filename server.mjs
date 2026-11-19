@@ -21,7 +21,7 @@ import { judge } from './lib/filter.mjs';
 import { logFromOcr } from './lib/ocr.mjs';
 import { decode, detect } from './lib/importers.mjs';
 import { designFilm, hasLegacyKey, localDesign, saveKey, testAgent, MODEL } from './lib/agent.mjs';
-import { renderFilm } from './lib/render.mjs';
+import { renderFilm, wav } from './lib/render.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(HERE, 'public');
@@ -289,6 +289,16 @@ async function createXunhuPayment(room) {
   if (!j || Number(j.errcode) !== 0) throw new Error(String(j.errmsg || '支付下单失败'));
   return { url: String(j.url || ''), qr: String(j.url_qrcode || '') };
 }
+/** 回调确认到账：只把订单标成已付款，等客户点「服务须知」后再生成 */
+function markPaid(room) {
+  if (!room || !room.order) return false;
+  if (room.order.status === 'paid') return true;
+  if (room.order.status !== 'awaiting' && room.order.status !== 'review') return false;
+  room.order.status = 'paid';
+  room.order.paidAt = Date.now();
+  tell(room);
+  return true;
+}
 function createOrder(room) {
   const id = randomBytes(6).toString('hex');
   room.order = { id, amount: ORDER_PRICE, status: 'awaiting', at: Date.now(), confirmToken: randomBytes(9).toString('base64url') };
@@ -516,7 +526,12 @@ async function runFilmJob(id, opts) {
     const outDir = join(HERE, 'outputs');
     mkdirSync(outDir, { recursive: true });
     const outFile = join(outDir, id + '.mp4');
-    const bgm = opts.musicUrl ? join(HERE, 'public', opts.musicUrl.replace(/^\//, '')) : '';
+    let bgm = opts.musicUrl ? join(HERE, 'public', opts.musicUrl.replace(/^\//, '')) : '';
+    /* 没传配乐也要有声音：现场合成一段 32 秒的钢琴底噪，不再输出无声视频 */
+    if (!bgm || !existsSync(bgm)) {
+      bgm = join(dir, 'bgm.wav');
+      try { writeFileSync(bgm, wav(32, 'melancholic', 'warm')); } catch { bgm = ''; }
+    }
     const hasBgm = Boolean(bgm && existsSync(bgm));
     const runFfmpeg = (args) => new Promise((ok) => {
       const child = spawn(ffmpeg, args, { cwd: dir, stdio: 'ignore' });
@@ -1191,7 +1206,7 @@ const server = createServer(async (req, res) => {
       if (ok) {
         const room = orders.get(String(p.orderNo || ''));
         const amount = Number(p.amount || 0);
-        if (room && room.order && Math.abs(amount - room.order.amount) < 0.005 && room.status === 'waiting' && !room.filmUrl) beginPaidFilm(room);
+        if (room && room.order && Math.abs(amount - room.order.amount) < 0.005 && room.status === 'waiting' && !room.filmUrl) markPaid(room);
       }
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
       return res.end(ok ? 'success' : 'fail');
@@ -1207,7 +1222,7 @@ const server = createServer(async (req, res) => {
         const room = orders.get(String(body.trade_order_id || ''));
         const amount = Number(body.total_fee || 0);
         if (room && room.order && Math.abs(amount - room.order.amount) < 0.005 && room.status === 'waiting' && !room.filmUrl) {
-          beginPaidFilm(room);
+          markPaid(room);
         }
       }
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
@@ -1248,7 +1263,7 @@ const server = createServer(async (req, res) => {
       if (!room || !room.order) return json(res, 404, { error: '没有这个订单。' });
       if (!(Math.abs(amount - room.order.amount) < 0.005)) return json(res, 400, { error: '金额不对。' });
       if (room.order.status === 'awaiting' || room.order.status === 'review' || room.order.status === 'failed') {
-        if (room.status === 'waiting' && !room.filmUrl) beginPaidFilm(room);
+        if (room.status === 'waiting' && !room.filmUrl) markPaid(room);
       }
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
       return res.end('success');
@@ -1297,7 +1312,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, status: room.order.status });
     }
 
-    const open = /^\/api\/rooms\/([A-Za-z0-9_-]{6,32})\/(state|events|join|confirm|message|offer|answer|checkout|paid)$/.exec(path);
+    const open = /^\/api\/rooms\/([A-Za-z0-9_-]{6,32})\/(state|events|join|confirm|message|offer|answer|checkout|paid|start)$/.exec(path);
     if (open) {
       const room = roomFor(open[1]);
       if (!room) return json(res, 404, { error: '这间房已经不在了，链接也许过期了。' });
@@ -1371,6 +1386,16 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { order: { id: room.order.id, amount: room.order.amount, status: room.order.status } });
       }
 
+      /* 客户看过服务须知、点确认之后，才真正开始生成 */
+      if (action === 'start' && req.method === 'POST') {
+        const body = await readBody(req);
+        const role = seatOf(room, body.role, body.token);
+        if (role !== 'host') return json(res, 403, { error: '只有发起链接的人可以确认。' });
+        if (!room.order || room.order.status !== 'paid') return json(res, 409, { error: '还没确认到账。' });
+        if (room.filmUrl) return json(res, 200, { ok: true });
+        beginPaidFilm(room);
+        return json(res, 200, { ok: true, orderId: room.order.id });
+      }
       if (action === 'confirm' && req.method === 'POST') {
         const body = await readBody(req);
         const role = seatOf(room, body.role, body.token);
