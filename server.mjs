@@ -1214,6 +1214,23 @@ const server = createServer(async (req, res) => {
       return res.end(ok ? 'success' : 'fail');
     }
 
+    /* 本地收款监听：电脑端 OCR 识别到 29.9 到账后调这里，自动放行最久的待付款订单 */
+    if (path === '/api/pay/local' && req.method === 'POST') {
+      if (!sameSecret(String(url.searchParams.get('token') || ''), PAY_TOKEN)) return json(res, 403, { error: 'token 不对。' });
+      const body = await readBody(req, 64 * 1024);
+      const amount = Number(body.amount || 0);
+      if (Math.abs(amount - ORDER_PRICE) >= 0.005) return json(res, 400, { error: '金额不对。' });
+      const now = Date.now();
+      const pending = [...orders.values()]
+        .filter((r) => r && r.order && (r.order.status === 'awaiting' || r.order.status === 'review')
+          && r.status === 'waiting' && !r.filmUrl && now - r.order.at < 30 * 60_000)
+        .sort((a, b) => a.order.at - b.order.at);
+      if (!pending.length) return json(res, 404, { error: '没有待付款的订单。' });
+      const room = pending[0];
+      beginPaidFilm(room);
+      return json(res, 200, { ok: true, orderId: room.order.id });
+    }
+
     /* 站长在微信里点一下：确认到账并开始生成 */
     if (path === '/pay/confirm' && req.method === 'GET') {
       const t = String(url.searchParams.get('t') || '');
