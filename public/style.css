@@ -293,3 +293,10 @@ select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-
 .kind b { font-size: 16px; }
 .kind span { font-size: 12px; color: #8a7a6c; }
 .kind.on { border-color: #ff7a59; box-shadow: 0 0 0 2px rgba(255,122,89,.18); background: #fff7f1; }
+
+.mid-ask { position: fixed; inset: 0; z-index: 80; background: rgba(8,6,10,.72); display: flex; align-items: center; justify-content: center; padding: 18px; backdrop-filter: blur(4px); }
+.mid-card { width: min(92vw, 360px); background: #fffdf9; color: #2b2018; border-radius: 20px; padding: 20px 18px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
+.mid-card h2 { font-size: 18px; margin: 8px 0 6px; }
+.mid-card .faint { font-size: 12px; color: #8a7a6c; margin: 0 0 14px; }
+.mid-card .choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 10px; }
+.mid-card .ghost { background: #efe8e0; color: #6b5b50; box-shadow: none; width: 100%; }

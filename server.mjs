@@ -606,7 +606,7 @@ function startFilmWindow(room, reason = 'guest') {
   room.filmStart = Date.now();
   room.filmReason = reason;
   room.readyDeadline = 0;
-  const windowMs = (Number(room.filmMs) > 3000 ? Number(room.filmMs) : FILM_WINDOW_MS) + 1500;
+  const windowMs = (Number(room.filmMs) > 3000 ? Number(room.filmMs) : FILM_WINDOW_MS) + 300; /* 视频多长就多长 */
   room.timers.push(setTimeout(() => {
     if (room.status === 'film') { room.status = 'confirm'; tell(room); }
   }, windowMs));

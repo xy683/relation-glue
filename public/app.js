@@ -699,6 +699,8 @@
       stopFilm();
       show('confirm');
       updateConfirm(state);
+      if (pendingAnswer === 'yes') { pendingAnswer = ''; hideMidAsk(); void answer(true); }
+      else if (pendingAnswer === 'no') { pendingAnswer = ''; hideMidAsk(); void answer(false); }
     } else if (state.status === 'declined') {
       pauseFilm();
       stopFilm();
@@ -787,6 +789,12 @@
     if (video.readyState >= 1) seek();
     else video.addEventListener('loadedmetadata', seek, { once: true });
     video.muted = false;
+    resetMidAsk();
+    const halfCheck = () => {
+      if (video.duration && video.currentTime >= video.duration / 2) showMidAsk();
+    };
+    video.addEventListener('timeupdate', halfCheck);
+    video.addEventListener('loadedmetadata', halfCheck);
     const btn = $('filmPlay');
     const playNow = async () => {
       video.muted = false;
@@ -1033,6 +1041,16 @@
     loop();
   }
 
+  /* 看到一半的弹层：是 / 否 / 看完视频再使用 */
+  let midShown = false;
+  let pendingAnswer = '';
+  function resetMidAsk() { midShown = false; pendingAnswer = ''; $('midAsk')?.classList.add('hidden'); }
+  function showMidAsk() {
+    if (midShown) return;
+    midShown = true;
+    $('midAsk')?.classList.remove('hidden');
+  }
+  function hideMidAsk() { $('midAsk')?.classList.add('hidden'); }
   /* ── 确认 ─────────────────────────────────────────── */
   function updateConfirm(state) {
     const role = room.role;
@@ -1168,6 +1186,9 @@
   window.addEventListener('pageshow', (e) => { if (e.persisted) void refreshState(); });
   window.addEventListener('focus', () => void refreshState());
 ;
+  $('midYes')?.addEventListener('click', () => { pendingAnswer = 'yes'; hideMidAsk(); });
+  $('midNo')?.addEventListener('click', () => { pendingAnswer = 'no'; hideMidAsk(); });
+  $('midLater')?.addEventListener('click', () => { pendingAnswer = 'ask'; hideMidAsk(); });
   $('payNoticeOk')?.addEventListener('click', () => void acceptNotice());
   $('accept').addEventListener('click', () => void answer(true));
   $('decline').addEventListener('click', () => void answer(false));
