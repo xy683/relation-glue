@@ -657,6 +657,8 @@
     /* 成片地址一出现：先装好画面，不自动播放 —— 等接收人进来，或者等满两分钟 */
     if (state.filmUrl) { loadFilm(state.filmUrl); closePay(); }
     renderGlue(state);
+    if (state.status === 'film' && state.midAsk) showMidAsk();
+    if (state.status !== 'film') hideMidAsk();
     const wasChat = room.state?.status === 'chat';
     room.state = state;
     $('names').innerHTML = `<i>${escape0(state.names.me)}</i> &nbsp;·&nbsp; <u>${escape0(state.names.partner)}</u>`;
