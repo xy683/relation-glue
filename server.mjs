@@ -27,7 +27,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(HERE, 'public');
 const PORT = Number(process.env.PORT || 5178);
 const FILM_MS = Number(process.env.GLUE_FILM_MS || 15_000);
-const CHAT_MS = Number(process.env.GLUE_CHAT_MS || 20 * 60_000);
+const CHAT_MS = Number(process.env.GLUE_CHAT_MS || 13 * 60_000 + 14_000); /* 13 分 14 秒 */
 const ROOM_TTL = 2 * 60 * 60_000;
 const LEAD_MS = 1500;
 
@@ -612,7 +612,7 @@ function startFilmWindow(room, reason = 'guest') {
   const totalMs = Number(room.filmMs) > 3000 ? Number(room.filmMs) : FILM_WINDOW_MS;
   room.timers.push(setTimeout(() => {
     if (room.status === 'film') { room.midAsk = true; tell(room); }
-  }, Math.max(3000, Math.floor(totalMs / 2))));
+  }, Math.max(3000, Math.floor(totalMs * 0.45))));
   const windowMs = (Number(room.filmMs) > 3000 ? Number(room.filmMs) : FILM_WINDOW_MS) + 300; /* 视频多长就多长 */
   room.timers.push(setTimeout(() => {
     if (room.status === 'film') { room.status = 'confirm'; tell(room); }
