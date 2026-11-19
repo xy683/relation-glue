@@ -461,13 +461,7 @@ async function runFilmJob(id, opts) {
     const charRefs = (Array.isArray(opts.avatars) ? opts.avatars : []).map(toRef).filter(Boolean).slice(0, 2);
     const bgRefs = (Array.isArray(opts.images) ? opts.images : []).map(toRef).filter(Boolean).slice(0, 1);
     const outs = [];
-    if (!charRefs.length) {
-      try {
-        const d = await ensureDefaultCouple(opts.key);
-        const u = d ? toRef(d) : '';
-        if (u) charRefs.push(u);
-      } catch { /* 没有默认图就只靠文字描述 */ }
-    }
+    /* 不再生成任何默认参考图：只用客户自己上传的照片 */
     const genOnce = async (i) => {
       job.phase = 'segments';
       const seg = segs[i];
