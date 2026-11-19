@@ -6,6 +6,8 @@
  */
 (function () {
   'use strict';
+  /* 进房间/邀请链接：直接不展示进站短片（脚本第一行就判定，避免闪一下） */
+  if (location.pathname.indexOf('/r/') === 0) document.documentElement.classList.add('no-intro');
 
   const $ = (id) => document.getElementById(id);
   const film = window.GlueFilm;
