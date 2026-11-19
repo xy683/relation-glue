@@ -541,6 +541,7 @@
       room.joined = true;
       apply(body.state);
       listen();
+      startStatePoll();
     } catch (e) {
       $('waitingText').textContent = e instanceof Error ? e.message : String(e);
       $('waitingText').classList.add('err');
@@ -555,13 +556,23 @@
       if (s) apply(s);
     } catch (e) { /* 忽略 */ }
   }
+  /* 4 秒兜底轮询：SSE 掉了、切了网络、切后台回来，都能自己追上房间状态 */
+  function startStatePoll() {
+    if (room.pollTimer) return;
+    room.pollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible' && room.id) void refreshState();
+    }, 4000);
+  }
   /* ── 实时 ─────────────────────────────────────────── */
   function listen() {
     if (room.sse) room.sse.close();
     const src = new EventSource(`/api/rooms/${room.id}/events?role=${room.role}&token=${encodeURIComponent(room.token)}`);
     src.addEventListener('state', (event) => { try { apply(JSON.parse(event.data)); } catch { /* ignore */ } });
     src.addEventListener('message', (event) => { try { push(JSON.parse(event.data)); } catch { /* ignore */ } });
-    src.onerror = () => { /* 浏览器自己会重连 */ };
+    src.onerror = () => {
+      try { src.close(); } catch (e) { /* 忽略 */ }
+      if (room.id) setTimeout(() => { if (room.id && document.visibilityState === 'visible') listen(); }, 4000);
+    };
     room.sse = src;
   }
 
