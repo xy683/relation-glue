@@ -255,3 +255,9 @@ select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-
 .pay-state { font-size: 11.5px; color: #9a8a7d; margin: 10px 0 0; line-height: 1.6; min-height: 16px; }
 .pay-go { display: block; padding: 14px; margin: 0 0 10px; background: linear-gradient(135deg, #6fb7ff, #1677ff); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; }
 .pay-qr { display: block; width: 62%; margin: 6px auto 10px; border-radius: 12px; border: 1px solid #e6ddd3; background: #fff; }
+.pay-channels { display: flex; flex-direction: column; gap: 10px; margin: 0 0 10px; }
+.pay-channels .btn { padding: 14px; text-decoration: none; display: block; }
+.pay-alipay { background: linear-gradient(135deg, #6fb7ff, #1677ff); color: #fff; }
+.pay-wechat { background: linear-gradient(135deg, #6ee08a, #22b14c); color: #04220f; }
+.pay-fallback { margin: 10px 0 0; font-size: 11.5px; }
+.pay-fallback a { color: #9a8a7d; text-decoration: underline; }

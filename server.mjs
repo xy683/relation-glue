@@ -225,7 +225,7 @@ const ZHIFU = (() => {
   } catch { /* 没配 */ }
   return null;
 })();
-async function createZhifuPayment(room) {
+async function createZhifuPayment(room, payType) {
   const o = room.order;
   const amount = o.amount.toFixed(2);
   const notifyUrl = BASE_URL + '/api/pay/zhifufm';
@@ -236,7 +236,7 @@ async function createZhifuPayment(room) {
     amount,
     notifyUrl,
     returnUrl: BASE_URL + '/r/' + room.id,
-    payType: ZHIFU.payType,
+    payType: payType || ZHIFU.payType,
     subject: '关系复原胶 三十秒动漫小故事',
     returnType: 'json',
     sign,
@@ -1347,7 +1347,8 @@ const server = createServer(async (req, res) => {
         if (!room.order || room.order.status === 'cancelled' || room.order.status === 'failed') createOrder(room);
         let payment = null;
         if (ZHIFU) {
-          try { payment = await createZhifuPayment(room); } catch (e) { payment = { error: e instanceof Error ? e.message : String(e) }; }
+          const channel = String(body.channel || 'alipay') === 'wechat' ? 'wechat' : 'alipay';
+          try { payment = await createZhifuPayment(room, channel); } catch (e) { payment = { error: e instanceof Error ? e.message : String(e) }; }
         } else if (XUNHU) {
           try { payment = await createXunhuPayment(room); } catch (e) { payment = { error: e instanceof Error ? e.message : String(e) }; }
         }

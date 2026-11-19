@@ -221,14 +221,17 @@
       <button type="button" class="btn pay-yes" id="payYes">是</button>
     </div>
     <div id="payStep2" class="hidden">
-      <p class="pay-note">请用微信或支付宝扫码支付 <b>29.9</b> 元；付完点下面按钮，站长确认到账后才会开始生成。</p>
-      <a class="btn pay-go hidden" id="payGo" href="#" target="_blank" rel="noopener">去支付 29.9 元</a>
+      <p class="pay-note">支付 <b>29.9</b> 元。付款成功后会自动到账并开始生成，全程不需要操作。</p>
+      <div class="pay-channels hidden">
+        <a class="btn pay-alipay" id="payAlipay" href="#">支付宝支付 29.9 元</a>
+        <a class="btn pay-wechat" id="payWechat" href="#">微信支付 29.9 元</a>
+      </div>
       <img class="pay-qr hidden" id="payQr" alt="支付二维码">
       <div class="pay-qrs">
         <figure><img src="/pay/wechat.jpg" alt="微信收款码"><figcaption>微信支付</figcaption></figure>
         <figure><img src="/pay/alipay.jpg" alt="支付宝收款码"><figcaption>支付宝</figcaption></figure>
       </div>
-      <button type="button" class="btn pay-done" id="payDone">我已完成付款 29.9 元</button>
+      <p class="pay-fallback"><a href="#" id="payDone">付了款但页面没反应？点这里</a></p>
       <p class="pay-state" id="payState"></p>
     </div>
   </div>

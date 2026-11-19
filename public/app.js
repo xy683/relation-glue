@@ -793,12 +793,11 @@
     $('payStep1').classList.remove('hidden');
     $('payStep2').classList.add('hidden');
     $('payState').textContent = '';
-    $('payDone').disabled = false;
     const x = Boolean(room.state && room.state.payXunhu);
     const qrs = document.querySelector('.pay-qrs');
     if (qrs) qrs.classList.toggle('hidden', x);
-    const go = $('payGo');
-    if (go) go.classList.toggle('hidden', !x);
+    const ch = document.querySelector('.pay-channels');
+    if (ch) ch.classList.toggle('hidden', !x);
     const qr = $('payQr');
     if (qr) qr.classList.add('hidden');
   }
@@ -811,28 +810,33 @@
   async function payYes() {
     $('payStep1').classList.add('hidden');
     $('payStep2').classList.remove('hidden');
-    $('payState').textContent = '正在创建订单…';
+    const x = Boolean(room.state && room.state.payXunhu);
+    $('payState').textContent = x ? '选一种支付方式；付完自动到账，不用再操作。' : '扫码付 29.9 元。';
+  }
+  /** 选支付宝/微信：下单，拿到支付链接，跳过去付 */
+  async function startChannel(channel) {
+    const el = $('payState');
+    if (el) el.textContent = '正在创建订单…';
     try {
       const res = await fetch(`/api/rooms/${room.id}/checkout`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ role: room.role, token: room.token }),
+        body: JSON.stringify({ role: room.role, token: room.token, channel }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || '订单没建成');
       const pay = body.payment || {};
-      if (pay.url) { const go = $('payGo'); if (go) { go.href = pay.url; go.classList.remove('hidden'); } }
-      if (pay.qr) { const qr = $('payQr'); if (qr) { qr.src = pay.qr; qr.classList.remove('hidden'); } }
-      if (pay.error) throw new Error('支付下单失败：' + pay.error);
-      const x = Boolean(room.state && room.state.payXunhu);
-      $('payState').textContent = x ? '点上面按钮去支付；付完自动开始，不用再操作。' : '扫码付 29.9 元；付完点上面的按钮。';
+      if (pay.error) throw new Error(pay.error);
+      if (!pay.url) throw new Error('没有拿到支付链接');
+      if (el) el.textContent = '正在跳转支付…';
+      location.href = pay.url;
     } catch (e) {
-      $('payState').textContent = e instanceof Error ? e.message : '订单没建成';
+      if (el) el.textContent = e instanceof Error ? e.message : '下单失败';
     }
   }
   async function payDone() {
     const btn = $('payDone');
     if (btn) btn.disabled = true;
-    $('payState').textContent = '已提交，等站长确认到账…';
+    $('payState').textContent = '已记录，等平台回调到账…';
     try {
       const res = await fetch(`/api/rooms/${room.id}/paid`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -853,7 +857,7 @@
     $('payStep1').classList.add('hidden');
     $('payStep2').classList.remove('hidden');
     const el = $('payState');
-    if (el) el.textContent = status === 'paid' ? '已确认到账，正在生成（480P · 30 秒）…' : '等站长确认到账…';
+    if (el) el.textContent = status === 'paid' ? '已到账，正在生成（480P · 30 秒）…' : '等待到账…付款后会自动开始。';
     startPayWatch();
   }
   function startPayWatch() {
@@ -867,17 +871,15 @@
       const el = $('payState');
       if (s.filmUrl) { closePay(); apply(s); return; }
       const st = s.order && s.order.status;
-      if (st === 'paid') { if (el) el.textContent = '已确认到账，正在生成（480P · 30 秒）…'; return; }
+      if (st === 'paid') { if (el) el.textContent = '已到账，正在生成（480P · 30 秒）…'; return; }
       if (st === 'cancelled') {
         clearInterval(payPoll); payWatching = false;
-        if (el) el.textContent = '站长没有确认到账。如果你已经付款，请联系站长。';
-        if ($('payDone')) $('payDone').disabled = false;
+        if (el) el.textContent = '这笔订单被取消了。如果你已经付过款，请点上面的链接联系站长。';
         return;
       }
       if (st === 'failed') {
         clearInterval(payPoll); payWatching = false;
         if (el) el.textContent = '生成失败了：' + ((s.order && s.order.error) || '未知原因') + '。';
-        if ($('payDone')) $('payDone').disabled = false;
       }
     }, 3000);
   }
@@ -1034,7 +1036,9 @@
   /* ── 事件 ─────────────────────────────────────────── */
   $('payNo')?.addEventListener('click', payNo);
   $('payYes')?.addEventListener('click', () => void payYes());
-  $('payDone')?.addEventListener('click', () => void payDone());
+  $('payDone')?.addEventListener('click', (e) => { e.preventDefault(); void payDone(); });
+  $('payAlipay')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('alipay'); });
+  $('payWechat')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('wechat'); });
   $('accept').addEventListener('click', () => void answer(true));
   $('decline').addEventListener('click', () => void answer(false));
   $('composer').addEventListener('submit', (event) => { event.preventDefault(); void send($('input').value); });
