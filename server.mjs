@@ -468,195 +468,46 @@ async function chibiRef(dataUrl, key, dir) {
 }
 async function runFilmJob(id, opts) {
   const job = filmJobs.get(id);
-  const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
-  const ffmpeg = process.platform === 'win32' ? 'C:/Users/Administrator/Doubao/tools/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
   try {
-    const segs = Array.isArray(opts.script.segments) ? opts.script.segments.slice(0, 3) : [];
-    if (!segs.length) throw new Error('脚本里没有分镜。');
-    job.total = segs.length;
-    /* 参考图缩到 768 宽、内联成 data URL：不依赖「豆包能不能访问到这台机器」，本地、内网、公网都一样 */
-    const toRef = (s) => {
-      if (typeof s !== 'string') return '';
-      if (s.startsWith('data:image/')) return s;
-      if (!s.startsWith('/qstyle/')) return '';
-      const file = join(HERE, 'public', s.replace(/^\//, ''));
-      if (!existsSync(file)) return '';
-      try {
-        const small = join(dir, 'ref-' + randomBytes(4).toString('hex') + '.jpg');
-        execFileSync(ffmpeg, ['-y', '-v', 'error', '-i', file, '-vf', 'scale=768:-2', '-q:v', '4', small], { timeout: 20000, stdio: 'ignore' });
-        if (existsSync(small)) return 'data:image/jpeg;base64,' + readFileSync(small).toString('base64');
-      } catch { /* 转不了就用原图 */ }
-      const ext = /\.(png|jpe?g|webp)$/i.exec(file)?.[1]?.toLowerCase() || 'png';
-      const mime = ext === 'jpg' ? 'jpeg' : ext;
-      return 'data:image/' + mime + ';base64,' + readFileSync(file).toString('base64');
-    };
-    const charRefs = [];
-    for (const raw of (Array.isArray(opts.avatars) ? opts.avatars : []).filter(Boolean).slice(0, 2)) {
-      const chibi = await chibiRef(raw, opts.key, dir);
-      const ref = chibi ? toRef(chibi) : toRef(raw);
-      if (ref) charRefs.push(ref);
+    job.phase = 'render';
+    const room = opts.roomId ? rooms.get(opts.roomId) : null;
+    const story = (room && room.story) ? room.story : (opts.story || {});
+    const ffmpeg = process.platform === 'win32' ? 'C:/Users/Administrator/Doubao/tools/ffmpeg/bin/ffmpeg.exe' : '/usr/bin/ffmpeg';
+    const fontName = filmFont() || (process.platform === 'win32' ? 'Microsoft YaHei' : 'Noto Sans CJK SC');
+    /* 本机渲染：不再调用任何火山视频模型 */
+    let bgmFile = opts.musicUrl ? join(HERE, 'public', opts.musicUrl.replace(/^\//, '')) : '';
+    if (!bgmFile || !existsSync(bgmFile)) {
+      const themeName = story.theme || (story.music && story.music.theme) || 'miss';
+      const themed = join(HERE, 'public', 'bgm', themeName + '.mp3');
+      bgmFile = existsSync(themed) ? themed : '';
     }
-    const bgRefs = (Array.isArray(opts.images) ? opts.images : []).map(toRef).filter(Boolean).slice(0, 1);
-    const outs = [];
-    /* 不再生成任何默认参考图：只用客户自己上传的照片 */
-    const genOnce = async (i) => {
-      job.phase = 'segments';
-      const seg = segs[i];
-      seg.refs = charRefs.concat(bgRefs);
-      const prompt = [
-        STYLE,
-        '第 ' + (i + 1) + '/' + segs.length + ' 镜，和上一镜是同一部短片里的连续画面：同一对角色、同一身衣服。',
-        opts.script && opts.script.characters ? '角色：' + String(opts.script.characters).slice(0, 40) : '',
-        seg.excerpt ? '这一镜发生的事：' + String(seg.excerpt).slice(0, 90) : '',
-        '场景：' + (seg.scene || '有光的地方') + '；镜头：' + (seg.shot || '缓慢推近') + '；情绪：' + (seg.emotion || '温柔') + '。',
-        '只画这一镜的事，画面里不要出现任何文字、字幕、对话框、logo、水印。',
-        NEGATIVE,
-      ].filter(Boolean).join('\n');
-      const content = [{ type: 'text', text: prompt }];
-      (seg.refs || []).slice(0, 2).forEach((ref) => { if (ref) content.push({ type: 'image_url', image_url: { url: ref }, role: 'reference_image' }); });
-      const make = async (resolution, items) => {
-        const r = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
-          body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content: items, ratio: '9:16', duration: 10, ...(resolution ? { resolution } : {}) }),
-        });
-        return { ok: r.ok, raw: await r.text() };
-      };
-      const errMsg = (raw) => {
-        let msg = raw.slice(0, 200);
-        try { const j = JSON.parse(raw); msg = j.error?.message || msg; } catch { /* 忽略 */ }
-        return msg;
-      };
-      /* 站长定价 29.9 元一支：固定 480P、30 秒，和之前的片子一致 */
-      let made = await make('480p', content);
-      if (!made.ok) {
-        const first = errMsg(made.raw);
-        /* 参考图被判定含真人：这一镜退回纯文字重试，不让整支片子失败 */
-        if (/real person|真人|真实人物/i.test(first)) {
-          made = await make('480p', [{ type: 'text', text: prompt }]);
-          if (!made.ok) throw new Error('第 ' + (i + 1) + ' 段：' + errMsg(made.raw));
-        } else {
-          throw new Error('第 ' + (i + 1) + ' 段：' + first);
-        }
-      }
-      const taskId = JSON.parse(made.raw).id;
-      let videoUrl = '';
-      for (let k = 0; k < 120; k += 1) {
-        await new Promise((ok) => setTimeout(ok, 3000));
-        const st = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/' + taskId, { headers: { authorization: 'Bearer ' + opts.key } });
-        const sj = await st.json().catch(() => ({}));
-        if (sj.status === 'succeeded') { videoUrl = sj.content?.video_url || ''; break; }
-        if (sj.status === 'failed') throw new Error('第 ' + (i + 1) + ' 段生成失败。');
-      }
-      if (!videoUrl) throw new Error('第 ' + (i + 1) + ' 段超时。');
-      const bin = await fetch(videoUrl);
-      writeFileSync(join(dir, i + '.mp4'), Buffer.from(await bin.arrayBuffer()));
-      outs[i] = join(dir, i + '.mp4');
-      job.step = outs.filter(Boolean).length;
-    };
-    const genOne = async (i) => {
-      for (let a = 0; a < 2; a += 1) {
-        try { await genOnce(i); return; } catch (e) {
-          if (a === 1) throw e;
-          await new Promise((ok) => setTimeout(ok, 4000));
-        }
-      }
-    };
-    await Promise.all(segs.map((_, i) => genOne(i)));
-    job.phase = 'concat';
-    const outDir = join(HERE, 'outputs');
-    mkdirSync(outDir, { recursive: true });
-    const outFile = join(outDir, id + '.mp4');
-    let bgm = opts.musicUrl ? join(HERE, 'public', opts.musicUrl.replace(/^\//, '')) : '';
-    /* 没传配乐也要有声音：现场合成一段 32 秒的钢琴底噪，不再输出无声视频 */
-    if (!bgm || !existsSync(bgm)) {
-      bgm = join(dir, 'bgm.wav');
-      try { writeFileSync(bgm, wav(32, 'melancholic', 'warm')); } catch { bgm = ''; }
-    }
-    const hasBgm = Boolean(bgm && existsSync(bgm));
-    const runFfmpeg = (args) => new Promise((ok) => {
-      const useNice = process.platform === 'linux';
-      const child = spawn(useNice ? 'nice' : ffmpeg, useNice ? ['-n', '10', ffmpeg, ...args] : args, { cwd: dir, stdio: 'ignore' });
-      child.on('exit', (code) => ok(code === 0));
-      child.on('error', () => ok(false));
-    });
-
-    /* 三镜之间 0.5 秒交叉溶解 + 首尾淡入淡出；故事里的句子由本机烧成字幕，不让模型自己写字（它一定写乱） */
-    const segDur = 10;
-    const fade = 0.5;
-    const total = Math.max(1, outs.length) * segDur - (Math.max(1, outs.length) - 1) * fade;
-    const font = filmFont();
-    if (font) writeFileSync(join(dir, 'subs.ass'), filmAss(segs, segDur, fade, font), 'utf8');
-
-    const graph = [];
-    const xargs = ['-y'];
-    outs.forEach((f, k) => {
-      xargs.push('-i', f);
-      graph.push('[' + k + ':v]scale=480:854:force_original_aspect_ratio=increase,crop=480:854,fps=30,setsar=1,format=yuv420p[v' + k + ']');
-    });
-    if (hasBgm) xargs.push('-i', bgm);
-    let vout = 'v0';
-    for (let k = 1; k < outs.length; k += 1) {
-      graph.push('[' + vout + '][v' + k + ']xfade=transition=fade:duration=' + fade + ':offset=' + (k * (segDur - fade)).toFixed(2) + '[x' + k + ']');
-      vout = 'x' + k;
-    }
-    const tail = ['fade=t=in:st=0:d=0.6', 'fade=t=out:st=' + Math.max(0, total - 0.8).toFixed(2) + ':d=0.8'];
-    if (font) tail.push('subtitles=subs.ass');
-    graph.push('[' + vout + ']' + tail.join(',') + '[vo]');
-    if (hasBgm) graph.push('[' + outs.length + ':a]apad[a]');
-    xargs.push('-filter_complex', graph.join(';'), '-map', '[vo]');
-    if (hasBgm) xargs.push('-map', '[a]', '-shortest', '-c:a', 'aac', '-b:a', '192k');
-    xargs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
-    let okRun = await runFfmpeg(xargs);
-
-    if (!okRun) {
-      /* 万一某一段长度不是 10 秒、交叉溶解对不上：退回硬切拼接，保证片子出得来 */
-      const list = join(dir, 'list.txt');
-      writeFileSync(list, outs.map((f) => "file '" + f.replace(/'/g, "'\\''") + "'").join('\n'));
-      const sargs = ['-y', '-f', 'concat', '-safe', '0', '-i', list];
-      if (hasBgm) sargs.push('-i', bgm);
-      let vf = 'fps=30,scale=480:854:force_original_aspect_ratio=increase,crop=480:854,setsar=1';
-      if (font) vf += ',subtitles=subs.ass';
-      sargs.push('-vf', vf);
-      if (hasBgm) sargs.push('-map', '0:v', '-map', '1:a', '-af', 'apad', '-shortest', '-c:a', 'aac', '-b:a', '192k');
-      sargs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
-      okRun = await runFfmpeg(sargs);
-    }
-    if (!okRun) throw new Error('拼接失败。');
+    const out = await renderFilm(story, { ffmpeg, fontName, bgmFile, outDir: join(HERE, 'outputs') });
     job.phase = 'done';
     job.status = 'done';
-    job.url = '/outputs/' + id + '.mp4';
+    job.url = '/outputs/' + out.id + '.mp4';
     if (opts.roomId) {
-      const room = rooms.get(opts.roomId);
-      if (room && room.status !== 'chat' && room.status !== 'ended') {
-        room.order.status = 'done';
-        room.filmUrl = job.url;
-        /* 成片好了先不播：TA 已经在房里就直接开始，否则等 TA 进来（最多两分钟） */
-        if (room.joined.guest) startFilmWindow(room, 'both');
-        else readyFilm(room);
+      const r = rooms.get(opts.roomId);
+      if (r && r.status !== 'chat' && r.status !== 'ended') {
+        r.filmUrl = job.url;
+        if (r.order) r.order.status = 'done';
+        if (r.joined.guest) startFilmWindow(r, 'both');
+        else readyFilm(r);
       }
     }
   } catch (e) {
     job.status = 'error';
     job.error = e instanceof Error ? e.message : String(e);
-    /* 失败不占额度：把这次的时间戳退回去，可以马上重试 */
-    try {
-      const arr = (filmQuota.get(opts.ip) || []).filter((t) => t !== opts.at);
-      filmQuota.set(opts.ip, arr);
-    } catch { /* 忽略 */ }
     if (opts.roomId) {
       const room = rooms.get(opts.roomId);
-      if (room && room.order && room.order.status === 'paid') {
+      if (room && room.order && room.order.status === 'generating') {
         room.order.status = 'failed';
         room.order.error = job.error;
         room.order.used = false;
-        /* 失败就退回待处理：后台可以点重试，不会重复收钱 */
         room.status = 'waiting';
         tell(room);
       }
     }
   } finally {
-    rmSync(dir, { recursive: true, force: true });
     setTimeout(() => filmJobs.delete(id), 60 * 60 * 1000);
   }
 }
