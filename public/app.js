@@ -513,6 +513,9 @@
     room.id = id;
     room.token = tokenFor(id);
     room.role = room.token ? 'host' : 'guest';
+    /* 地址栏里的 #h= 只用于认领身份，认领完就抹掉：避免把带 token 的网址发给别人 */
+    if (room.token) remember(id, room.token);
+    if (location.hash) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* 忽略 */ } }
     $('home').classList.add('hidden');
     $('room').classList.remove('hidden');
     /* 接收方不能生成视频，只能等发起人 */

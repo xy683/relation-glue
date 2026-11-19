@@ -13,7 +13,7 @@ import { createServer } from 'node:http';
 import { randomBytes, createHash } from 'node:crypto';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { spawn, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyze } from './lib/analyzer.mjs';
@@ -842,9 +842,31 @@ function serveStatic(req, res, pathname) {
     const name = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '').replace(/^outputs[/\\]+/, '');
     const file = resolve(outDir, name);
     if (!file.startsWith(outDir + sep) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
-    const body = readFileSync(file);
-    res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': body.length, 'cache-control': 'no-cache' });
-    res.end(body);
+    const size = statSync(file).size;
+    const range = String(req.headers.range || "");
+    const rm = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (rm) {
+      let start = rm[1] ? parseInt(rm[1], 10) : 0;
+      let end = rm[2] ? parseInt(rm[2], 10) : size - 1;
+      if (!Number.isFinite(start) || start < 0) start = 0;
+      if (!Number.isFinite(end) || end >= size) end = size - 1;
+      if (start > end) { res.writeHead(416, { "content-range": "bytes */" + size }); res.end(); return; }
+      res.writeHead(206, {
+        "content-type": "video/mp4",
+        "content-length": end - start + 1,
+        "content-range": "bytes " + start + "-" + end + "/" + size,
+        "accept-ranges": "bytes",
+        "cache-control": "public, max-age=3600",
+      });
+      createReadStream(file, { start, end }).pipe(res);
+      return;
+    }
+    res.writeHead(200, {
+      "content-type": "video/mp4", "content-length": size,
+      "accept-ranges": "bytes", "cache-control": "public, max-age=3600",
+    });
+    createReadStream(file).pipe(res);
+    return;
     return;
   }
   const rel = normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, '');
