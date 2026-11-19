@@ -654,11 +654,10 @@
     if (state.order && room.role === 'host' && !state.filmUrl) {
       if (state.order.status === 'paid' && state.order.needsConsent) {
         showNotice();
-      } else if (state.order.status === 'paid' && state.status === 'film') {
+      } else if (state.order.status === 'generating' || state.status === 'film') {
         showGenerating();
         startPayWatch();
-      } else if (state.order.status !== 'paid' && state.order.status !== 'review') {
-        /* 这单已经结束或没付款：别再留着弹窗 */
+      } else if (state.order.status === 'done' || state.order.status === 'failed' || state.order.status === 'cancelled') {
         closePay();
       }
     }
@@ -950,6 +949,8 @@
       const el = $('payState');
       if (s.filmUrl) { closePay(); apply(s); return; }
       const st = s.order && s.order.status;
+      if (st === 'generating') { showGenerating(); return; }
+      if (st === 'done') { closePay(); apply(s); return; }
       if (st === 'paid') {
         if (s.status === 'film' || noticeOpen || !(s.order && s.order.needsConsent)) showGenerating();
         else showNotice();

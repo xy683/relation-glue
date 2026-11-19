@@ -343,7 +343,7 @@ function beginPaidFilm(room) {
   }
   const jobId = randomBytes(6).toString('hex');
   filmJobs.set(jobId, { status: 'running', phase: 'script', step: 0, total: 3, url: '', error: '', at: Date.now() });
-  room.order.status = 'paid';
+  room.order.status = 'generating';
   room.order.paidAt = Date.now();
   room.order.used = true;
   room.order.jobId = jobId;
@@ -628,6 +628,7 @@ async function runFilmJob(id, opts) {
     if (opts.roomId) {
       const room = rooms.get(opts.roomId);
       if (room && room.status !== 'chat' && room.status !== 'ended') {
+        room.order.status = 'done';
         room.filmUrl = job.url;
         /* 成片好了先不播：TA 已经在房里就直接开始，否则等 TA 进来（最多两分钟） */
         if (room.joined.guest) startFilmWindow(room, 'both');

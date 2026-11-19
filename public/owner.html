@@ -44,7 +44,7 @@
 (function () {
   const key = new URLSearchParams(location.search).get('key') || '';
   const list = document.getElementById('list');
-  const label = (s) => ({ awaiting: '待付款', review: '已付款 · 待确认', paid: '已到账 · 生成中', failed: '生成失败', cancelled: '已取消' }[s] || s);
+  const label = (s) => ({ awaiting: '待付款', review: '已付款 · 待确认', paid: '已付款 · 待生成', generating: '生成中', done: '已完成', failed: '生成失败', cancelled: '已取消' }[s] || s);
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let busy = false;
 
