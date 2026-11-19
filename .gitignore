@@ -10,4 +10,5 @@ owner-key.txt
 .shot.mjs
 outputs/*.png
 public/pay/
-shots/
+shots/outputs/*.mp4
+public/qstyle/default-couple.png
