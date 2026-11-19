@@ -651,8 +651,16 @@
     if (state.order && room.role === 'host' && !state.filmUrl && state.order.status === 'review') {
       showPayWaiting('review');
     }
-    if (state.order && room.role === 'host' && !state.filmUrl && state.order.status === 'paid' && !state.order.used) {
-      if (state.status === 'film') { showGenerating(); startPayWatch(); } else { showNotice(); }
+    if (state.order && room.role === 'host' && !state.filmUrl) {
+      if (state.order.status === 'paid' && state.order.needsConsent) {
+        showNotice();
+      } else if (state.order.status === 'paid' && state.status === 'film') {
+        showGenerating();
+        startPayWatch();
+      } else if (state.order.status !== 'paid' && state.order.status !== 'review') {
+        /* 这单已经结束或没付款：别再留着弹窗 */
+        closePay();
+      }
     }
 
     if (state.status === 'waiting') {
@@ -943,7 +951,7 @@
       if (s.filmUrl) { closePay(); apply(s); return; }
       const st = s.order && s.order.status;
       if (st === 'paid') {
-        if (s.status === 'film' || noticeOpen) showGenerating();
+        if (s.status === 'film' || noticeOpen || !(s.order && s.order.needsConsent)) showGenerating();
         else showNotice();
         return;
       }

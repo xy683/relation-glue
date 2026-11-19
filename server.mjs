@@ -713,7 +713,7 @@ function publicState(room, now = Date.now()) {
     serverNow: now,
     story: Object.assign({}, room.story, { beats: [] }),
     filmUrl: room.filmUrl || '',
-    order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status, error: room.order.error || '', used: Boolean(room.order.used) } : null,
+    order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status, error: room.order.error || '', used: Boolean(room.order.used), needsConsent: Boolean(room.order.status === 'paid' && !room.order.used && !room.filmUrl && room.status === 'waiting') } : null,
     payXunhu: Boolean(XUNHU || ZHIFU),
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
   };
