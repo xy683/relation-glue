@@ -794,8 +794,12 @@
     else video.addEventListener('loadedmetadata', seek, { once: true });
     video.muted = false;
     resetMidAsk();
+    const totalSec = () => (Number.isFinite(video.duration) && video.duration > 1 ? video.duration : (Number(state.filmMs) || 0) / 1000);
     const halfCheck = () => {
-      if (video.duration && video.currentTime >= video.duration / 2) showMidAsk();
+      const d = totalSec();
+      if (!(d > 1)) return;
+      if (video.currentTime >= d * 0.5) showMidAsk();
+      if (video.currentTime >= d - 1.5) showMidAsk(true);
     };
     video.addEventListener('timeupdate', halfCheck);
     video.addEventListener('seeked', halfCheck);
@@ -1067,8 +1071,9 @@
   let midShown = false;
   let pendingAnswer = '';
   function resetMidAsk() { midShown = false; pendingAnswer = ''; $('midAsk')?.classList.add('hidden'); }
-  function showMidAsk() {
-    if (midShown) return;
+  function showMidAsk(force = false) {
+    if (pendingAnswer) return;
+    if (midShown && !force) return;
     midShown = true;
     $('midAsk')?.classList.remove('hidden');
   }
