@@ -1061,12 +1061,15 @@
     const a = chatBgmEl();
     if (!a) return;
     a.volume = 0.42;
-    const btn = $('chatBgmBtn');
-    const playing = a.play();
-    if (playing && playing.then) {
-      playing.then(() => { if (btn) btn.classList.add('on'); })
-        .catch(() => { if (btn) { btn.classList.remove('on'); btn.classList.add('hint'); } });
-    }
+    a.loop = true;
+    /* 没有开关：进聊天就放；被浏览器拦了就等下一次点击/触摸继续放 */
+    const resumeOnTouch = () => {
+      const once = () => { try { a.play().catch(() => {}); } catch (e) { /* 忽略 */ } };
+      document.addEventListener('pointerdown', once, { once: true });
+      document.addEventListener('touchstart', once, { once: true });
+    };
+    const pr = a.play();
+    if (pr && pr.catch) pr.catch(resumeOnTouch);
   }
   function stopChatBgm() {
     const a = chatBgmEl();
@@ -1126,22 +1129,10 @@
   $('payDone')?.addEventListener('click', (e) => { e.preventDefault(); void payDone(); });
   $('payAlipay')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('alipay'); });
   $('payWechat')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('wechat'); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void refreshState(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { void refreshState(); if (room.view === 'chat') startChatBgm(); } });
   window.addEventListener('pageshow', (e) => { if (e.persisted) void refreshState(); });
   window.addEventListener('focus', () => void refreshState());
-  $('chatBgmBtn')?.addEventListener('click', () => {
-    const a = chatBgmEl();
-    const btn = $('chatBgmBtn');
-    if (!a) return;
-    if (a.paused) {
-      a.volume = 0.42;
-      const pr = a.play();
-      if (pr && pr.then) pr.then(() => { if (btn) { btn.classList.add('on'); btn.classList.remove('hint'); } }).catch(() => {});
-    } else {
-      a.pause();
-      if (btn) btn.classList.remove('on');
-    }
-  });
+;
   $('payNoticeOk')?.addEventListener('click', () => void acceptNotice());
   $('accept').addEventListener('click', () => void answer(true));
   $('decline').addEventListener('click', () => void answer(false));
