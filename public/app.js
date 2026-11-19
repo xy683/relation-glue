@@ -544,6 +544,14 @@
     }
   }
 
+  /* 从支付页切回来、或者页面重新可见时，主动拉一次状态：付款成功就不用再点任何按钮 */
+  async function refreshState() {
+    if (!room.id) return;
+    try {
+      const s = await (await fetch(`/api/rooms/${room.id}/state`)).json();
+      if (s) apply(s);
+    } catch (e) { /* 忽略 */ }
+  }
   /* ── 实时 ─────────────────────────────────────────── */
   function listen() {
     if (room.sse) room.sse.close();
@@ -843,8 +851,11 @@
       const pay = body.payment || {};
       if (pay.error) throw new Error(pay.error);
       if (!pay.url) throw new Error('没有拿到支付链接');
-      if (el) el.textContent = '正在跳转支付…';
-      location.href = pay.url;
+      /* 新标签页打开收银台：本页继续轮询，付款成功会自动跳转，不用再回来点按钮 */
+      const win = window.open(pay.url, '_blank');
+      if (!win) { location.href = pay.url; return; }
+      if (el) el.textContent = '已打开支付页：付完回到这里，会自动到账。';
+      startPayWatch();
     } catch (e) {
       if (el) el.textContent = e instanceof Error ? e.message : '下单失败';
     }
@@ -1115,6 +1126,9 @@
   $('payDone')?.addEventListener('click', (e) => { e.preventDefault(); void payDone(); });
   $('payAlipay')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('alipay'); });
   $('payWechat')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('wechat'); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void refreshState(); });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) void refreshState(); });
+  window.addEventListener('focus', () => void refreshState());
   $('chatBgmBtn')?.addEventListener('click', () => {
     const a = chatBgmEl();
     const btn = $('chatBgmBtn');

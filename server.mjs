@@ -434,6 +434,32 @@ function filmAss(segs, segDur, fade, font) {
   return head.concat(events).join('\n');
 }
 
+/** 把客户上传的照片转成 Q 版（只在付款后的生成任务里调用） */
+async function chibiRef(dataUrl, key, dir) {
+  try {
+    const r = await fetch('https://ark.cn-beijing.volces.com/api/v3/images/generations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+      body: JSON.stringify({
+        model: 'doubao-seedream-5-5-261028',
+        prompt: 'Turn this photo into a cute chibi anime character: big head, big eyes, cel-shaded 2D anime style, soft warm light, clean lineart, keep the person recognizable but fully stylized, plain soft background, no text',
+        image: dataUrl,
+        size: '1024x1024',
+        response_format: 'url',
+      }),
+    });
+    const raw = await r.text();
+    if (!r.ok) return '';
+    const body = JSON.parse(raw);
+    const url = body && body.data && body.data[0] && body.data[0].url;
+    if (!url) return '';
+    const bin = await fetch(url);
+    if (!bin.ok) return '';
+    const f = join(dir, 'chibi-' + randomBytes(4).toString('hex') + '.png');
+    writeFileSync(f, Buffer.from(await bin.arrayBuffer()));
+    return f;
+  } catch (e) { return ''; }
+}
 async function runFilmJob(id, opts) {
   const job = filmJobs.get(id);
   const dir = mkdtempSync(join(tmpdir(), 'gluefilm-'));
@@ -458,7 +484,12 @@ async function runFilmJob(id, opts) {
       const mime = ext === 'jpg' ? 'jpeg' : ext;
       return 'data:image/' + mime + ';base64,' + readFileSync(file).toString('base64');
     };
-    const charRefs = (Array.isArray(opts.avatars) ? opts.avatars : []).map(toRef).filter(Boolean).slice(0, 2);
+    const charRefs = [];
+    for (const raw of (Array.isArray(opts.avatars) ? opts.avatars : []).filter(Boolean).slice(0, 2)) {
+      const chibi = await chibiRef(raw, opts.key, dir);
+      const ref = chibi ? toRef(chibi) : toRef(raw);
+      if (ref) charRefs.push(ref);
+    }
     const bgRefs = (Array.isArray(opts.images) ? opts.images : []).map(toRef).filter(Boolean).slice(0, 1);
     const outs = [];
     /* 不再生成任何默认参考图：只用客户自己上传的照片 */
@@ -477,20 +508,30 @@ async function runFilmJob(id, opts) {
       ].filter(Boolean).join('\n');
       const content = [{ type: 'text', text: prompt }];
       (seg.refs || []).slice(0, 2).forEach((ref) => { if (ref) content.push({ type: 'image_url', image_url: { url: ref }, role: 'reference_image' }); });
-      const make = async (resolution) => {
+      const make = async (resolution, items) => {
         const r = await fetch('https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks', {
           method: 'POST',
           headers: { 'content-type': 'application/json', authorization: 'Bearer ' + opts.key },
-          body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content, ratio: '9:16', duration: 10, ...(resolution ? { resolution } : {}) }),
+          body: JSON.stringify({ model: 'doubao-seedance-2-0-fast-260128', content: items, ratio: '9:16', duration: 10, ...(resolution ? { resolution } : {}) }),
         });
         return { ok: r.ok, raw: await r.text() };
       };
+      const errMsg = (raw) => {
+        let msg = raw.slice(0, 200);
+        try { const j = JSON.parse(raw); msg = j.error?.message || msg; } catch { /* 忽略 */ }
+        return msg;
+      };
       /* 站长定价 29.9 元一支：固定 480P、30 秒，和之前的片子一致 */
-      const made = await make('480p');
+      let made = await make('480p', content);
       if (!made.ok) {
-        let msg = made.raw.slice(0, 200);
-        try { const j = JSON.parse(made.raw); msg = j.error?.message || msg; } catch { /* 忽略 */ }
-        throw new Error('第 ' + (i + 1) + ' 段：' + msg);
+        const first = errMsg(made.raw);
+        /* 参考图被判定含真人：这一镜退回纯文字重试，不让整支片子失败 */
+        if (/real person|真人|真实人物/i.test(first)) {
+          made = await make('480p', [{ type: 'text', text: prompt }]);
+          if (!made.ok) throw new Error('第 ' + (i + 1) + ' 段：' + errMsg(made.raw));
+        } else {
+          throw new Error('第 ' + (i + 1) + ' 段：' + first);
+        }
       }
       const taskId = JSON.parse(made.raw).id;
       let videoUrl = '';
