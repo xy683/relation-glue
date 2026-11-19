@@ -796,7 +796,25 @@
       if (video.duration && video.currentTime >= video.duration / 2) showMidAsk();
     };
     video.addEventListener('timeupdate', halfCheck);
+    video.addEventListener('seeked', halfCheck);
+    video.addEventListener('ended', halfCheck);
     video.addEventListener('loadedmetadata', halfCheck);
+    setTimeout(() => {
+      if (video.readyState >= 1) return;
+      let tip = $('filmSlow');
+      if (!tip) {
+        tip = document.createElement('a');
+        tip.id = 'filmSlow';
+        tip.className = 'film-slow';
+        tip.target = '_blank';
+        tip.rel = 'noopener';
+        tip.textContent = '视频加载慢？点这里直接打开';
+        document.getElementById('stage')?.appendChild(tip);
+      }
+      tip.href = state.filmUrl;
+      tip.classList.remove('hidden');
+    }, 8000);
+
     const btn = $('filmPlay');
     const playNow = async () => {
       video.muted = false;
