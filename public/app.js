@@ -452,18 +452,6 @@
       btn.disabled = false;
       btn.textContent = '导出 MP4';
     });
-    avaMe?.addEventListener('change', async (event) => {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      avatars.me = await readAvatar(file);
-      if (avatars.me) { avaMeImg.src = avatars.me; avaMeBox.classList.add('has'); }
-    });
-    avaPeer?.addEventListener('change', async (event) => {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      avatars.peer = await readAvatar(file);
-      if (avatars.peer) { avaPeerImg.src = avatars.peer; avaPeerBox.classList.add('has'); }
-    });
     void refreshAgent();
         /* 云端（Linux）没有本地应用可打开：把「从应用导入」收起来，只留粘贴/文件/截图 */
     fetch('/api/health').then((r) => r.json()).then((body) => {
