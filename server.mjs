@@ -575,7 +575,8 @@ async function runFilmJob(id, opts) {
     }
     const hasBgm = Boolean(bgm && existsSync(bgm));
     const runFfmpeg = (args) => new Promise((ok) => {
-      const child = spawn(ffmpeg, args, { cwd: dir, stdio: 'ignore' });
+      const useNice = process.platform === 'linux';
+      const child = spawn(useNice ? 'nice' : ffmpeg, useNice ? ['-n', '10', ffmpeg, ...args] : args, { cwd: dir, stdio: 'ignore' });
       child.on('exit', (code) => ok(code === 0));
       child.on('error', () => ok(false));
     });
@@ -591,7 +592,7 @@ async function runFilmJob(id, opts) {
     const xargs = ['-y'];
     outs.forEach((f, k) => {
       xargs.push('-i', f);
-      graph.push('[' + k + ':v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1,format=yuv420p[v' + k + ']');
+      graph.push('[' + k + ':v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,fps=30,setsar=1,format=yuv420p[v' + k + ']');
     });
     if (hasBgm) xargs.push('-i', bgm);
     let vout = 'v0';
@@ -605,7 +606,7 @@ async function runFilmJob(id, opts) {
     if (hasBgm) graph.push('[' + outs.length + ':a]apad[a]');
     xargs.push('-filter_complex', graph.join(';'), '-map', '[vo]');
     if (hasBgm) xargs.push('-map', '[a]', '-shortest', '-c:a', 'aac', '-b:a', '192k');
-    xargs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
+    xargs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
     let okRun = await runFfmpeg(xargs);
 
     if (!okRun) {
@@ -614,11 +615,11 @@ async function runFilmJob(id, opts) {
       writeFileSync(list, outs.map((f) => "file '" + f.replace(/'/g, "'\\''") + "'").join('\n'));
       const sargs = ['-y', '-f', 'concat', '-safe', '0', '-i', list];
       if (hasBgm) sargs.push('-i', bgm);
-      let vf = 'fps=30,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1';
+      let vf = 'fps=30,scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,setsar=1';
       if (font) vf += ',subtitles=subs.ass';
       sargs.push('-vf', vf);
       if (hasBgm) sargs.push('-map', '0:v', '-map', '1:a', '-af', 'apad', '-shortest', '-c:a', 'aac', '-b:a', '192k');
-      sargs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
+      sargs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
       okRun = await runFfmpeg(sargs);
     }
     if (!okRun) throw new Error('拼接失败。');
@@ -1133,7 +1134,7 @@ const server = createServer(async (req, res) => {
         args.push('-filter_complex', '[0:v]fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1[v]');
         args.push('-map', '[v]');
         if (bgmSrc && existsSync(bgmSrc)) args.push('-map', '1:a', '-shortest', '-c:a', 'aac', '-b:a', '160k');
-        args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
+        args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile);
         const okRun = await new Promise((ok) => {
           const child = spawn(ffmpeg, args, { stdio: 'ignore' });
           child.on('exit', (code) => ok(code === 0));
@@ -1475,7 +1476,13 @@ const server = createServer(async (req, res) => {
         room.confirm[role] = body.yes === true;
         if (body.yes !== true) { decline(room); return json(res, 200, { ok: true, status: room.status }); }
         if (room.confirm.host === true && room.confirm.guest === true) startChat(room);
-        else tell(room);
+        else {
+          tell(room);
+          /* 兜底：一方确认后 45 秒另一方没反应，也进聊天（两边都已经看完） */
+          room.timers.push(setTimeout(() => {
+            if (room.status === 'confirm' && (room.confirm.host || room.confirm.guest)) startChat(room);
+          }, 45_000));
+        }
         return json(res, 200, { ok: true, status: room.status });
       }
 
