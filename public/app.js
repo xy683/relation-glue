@@ -821,7 +821,7 @@
     const halfCheck = () => {
       const d = totalSec();
       if (!(d > 1)) return;
-      if (video.currentTime >= d * 0.5) { showMidAsk(true); tellMid(); }
+      if (video.currentTime >= d * 0.45) { showMidAsk(true); tellMid(); }
       if (video.currentTime >= d - 1.5) showMidAsk(true);
     };
     video.addEventListener('timeupdate', halfCheck);
@@ -1256,7 +1256,7 @@
       if (st.status !== 'film') return;
       const d = (Number.isFinite(fv.duration) && fv.duration > 1) ? fv.duration : (Number(st.filmMs) || 0) / 1000;
       if (!(d > 1)) return;
-      if (fv.currentTime >= d * 0.5) { showMidAsk(true); tellMid(); }
+      if (fv.currentTime >= d * 0.45) { showMidAsk(true); tellMid(); }
     };
     ['timeupdate', 'seeked', 'ended', 'loadedmetadata'].forEach((n) => fv && fv.addEventListener(n, midTick));
   } catch (e) { /* 忽略 */ }
