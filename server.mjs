@@ -330,6 +330,10 @@ async function pushPaid(room) {
 }
 /** 站长确认到账：这里才开始花钱调模型 */
 function beginPaidFilm(room) {
+  if (room && room.order && room.order.jobId) {
+    const running = filmJobs.get(room.order.jobId);
+    if (running && running.status === 'running') return room.order.jobId;
+  }
   if (!OWNER_KEY) {
     room.order.status = 'error';
     room.order.error = '站长的 Key 还没配好';
@@ -641,6 +645,8 @@ async function runFilmJob(id, opts) {
       if (room && room.order && room.order.status === 'paid') {
         room.order.status = 'failed';
         room.order.error = job.error;
+        /* 失败就退回待处理：后台可以点重试，不会重复收钱 */
+        room.status = 'waiting';
         tell(room);
       }
     }
@@ -1430,6 +1436,7 @@ const server = createServer(async (req, res) => {
         if (role !== 'host') return json(res, 403, { error: '只有发起链接的人可以确认。' });
         if (!room.order || room.order.status !== 'paid') return json(res, 409, { error: '还没确认到账。' });
         if (room.filmUrl) return json(res, 200, { ok: true });
+        if (room.status === 'film') return json(res, 200, { ok: true, running: true });
         beginPaidFilm(room);
         return json(res, 200, { ok: true, orderId: room.order.id });
       }
