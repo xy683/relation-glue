@@ -211,6 +211,42 @@ const PAY_TOKEN = (() => {
 const sameSecret = (a, b) => Boolean(a) && Boolean(b) && a.length === b.length
   && createHash('sha256').update(a).digest('hex') === createHash('sha256').update(b).digest('hex');
 
+/* 支付FM（个人可进件拉卡拉/杉德聚合收银台，官方回调，不用挂机）
+ * zhifufm.txt：第1行接口根地址，第2行商户号，第3行接入密钥，第4行 payType（可空，默认 lkl-cashier） */
+const ZHIFU = (() => {
+  const api = String(process.env.ZHIFU_API || '').trim();
+  const merchant = String(process.env.ZHIFU_MERCHANT || '').trim();
+  const secret = String(process.env.ZHIFU_SECRET || '').trim();
+  const payType = String(process.env.ZHIFU_PAYTYPE || 'lkl-cashier').trim();
+  if (api && merchant && secret) return { api, merchant, secret, payType };
+  try {
+    const lines = readFileSync(join(HERE, 'zhifufm.txt'), 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (lines.length >= 3) return { api: lines[0], merchant: lines[1], secret: lines[2], payType: lines[3] || 'lkl-cashier' };
+  } catch { /* 没配 */ }
+  return null;
+})();
+async function createZhifuPayment(room) {
+  const o = room.order;
+  const amount = o.amount.toFixed(2);
+  const notifyUrl = BASE_URL + '/api/pay/zhifufm';
+  const sign = createHash('md5').update(ZHIFU.merchant + o.id + amount + notifyUrl + ZHIFU.secret).digest('hex');
+  const q = new URLSearchParams({
+    merchantNum: ZHIFU.merchant,
+    orderNo: o.id,
+    amount,
+    notifyUrl,
+    returnUrl: BASE_URL + '/r/' + room.id,
+    payType: ZHIFU.payType,
+    subject: '关系复原胶 三十秒动漫小故事',
+    returnType: 'json',
+    sign,
+  });
+  const r = await fetch(ZHIFU.api.replace(/\/+$/, '') + '/startOrder?' + q.toString(), { method: 'POST' });
+  const j = await r.json().catch(() => ({}));
+  if (!j || j.success !== true) throw new Error(String(j.msg || '支付FM下单失败'));
+  return { url: String((j.data && j.data.payUrl) || '') };
+}
+
 /* 虎皮椒（个人聚合支付，不用执照、不用挂机）：appid + 密钥 配好就等于接了支付宝/微信 */
 const XUNHU = (() => {
   const appid = String(process.env.XUNHU_APPID || '').trim();
@@ -619,7 +655,7 @@ function publicState(room, now = Date.now()) {
     story: Object.assign({}, room.story, { beats: [] }),
     filmUrl: room.filmUrl || '',
     order: room.order ? { id: room.order.id, amount: room.order.amount, status: room.order.status } : null,
-    payXunhu: Boolean(XUNHU),
+    payXunhu: Boolean(XUNHU || ZHIFU),
     messages: room.status === 'chat' ? room.messages.slice(-200) : [],
   };
 }
@@ -1140,6 +1176,27 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, url: '/pay/' + kind + '.jpg', bytes: bytes.length });
     }
 
+    /* 支付FM回调：GET/POST，验签 + 金额核对，通过就自动放行 */
+    if (path === '/api/pay/zhifufm') {
+      if (!ZHIFU) return json(res, 503, { error: '还没配置支付FM。' });
+      const p = Object.fromEntries(url.searchParams);
+      if (req.method === 'POST') {
+        const raw = await readImage(req, 64 * 1024).then((b) => b.toString('utf8')).catch(() => '');
+        Object.assign(p, Object.fromEntries(new URLSearchParams(raw)));
+      }
+      const sign = createHash('md5')
+        .update(String(p.state || '') + String(p.merchantNum || '') + String(p.orderNo || '') + String(p.amount || '') + ZHIFU.secret)
+        .digest('hex');
+      const ok = sign === String(p.sign || '') && String(p.state) === '1' && String(p.merchantNum) === ZHIFU.merchant;
+      if (ok) {
+        const room = orders.get(String(p.orderNo || ''));
+        const amount = Number(p.amount || 0);
+        if (room && room.order && amount >= room.order.amount - 0.01 && room.status === 'waiting' && !room.filmUrl) beginPaidFilm(room);
+      }
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      return res.end(ok ? 'success' : 'fail');
+    }
+
     /* 虎皮椒回调：验签 + 金额核对，通过就自动放行 */
     if (path === '/api/pay/xunhu') {
       if (!XUNHU) return json(res, 503, { error: '还没配置虎皮椒。' });
@@ -1289,7 +1346,9 @@ const server = createServer(async (req, res) => {
         if (room.status !== 'waiting') return json(res, 409, { error: '现在不是充值的时候。' });
         if (!room.order || room.order.status === 'cancelled' || room.order.status === 'failed') createOrder(room);
         let payment = null;
-        if (XUNHU) {
+        if (ZHIFU) {
+          try { payment = await createZhifuPayment(room); } catch (e) { payment = { error: e instanceof Error ? e.message : String(e) }; }
+        } else if (XUNHU) {
           try { payment = await createXunhuPayment(room); } catch (e) { payment = { error: e instanceof Error ? e.message : String(e) }; }
         }
         tell(room);
