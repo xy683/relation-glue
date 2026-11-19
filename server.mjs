@@ -166,13 +166,8 @@ function buildScriptFromStory(text, me, partner) {
 }
 const filmJobs = new Map();
 /* 站长的 Key：优先读 /opt/glue/owner-key.txt，其次环境变量。只留在服务器，绝不下发到浏览器。 */
-const OWNER_KEY = (() => {
-  try {
-    const fromFile = readFileSync(join(HERE, 'owner-key.txt'), 'utf8').trim();
-    if (fromFile) return fromFile;
-  } catch { /* 没有文件就继续 */ }
-  return String(process.env.ARK_API_KEY || '').trim();
-})();
+/* 所有模型 Key 已断开：不再读取 owner-key.txt，也不读任何模型环境变量 */
+const OWNER_KEY = '';
 
 /* ── 先收钱，再生成 ─────────────────────────────────────
  * 一次成片 29.9 元（3 段 ×10 秒，480P）。顾客点「是」才建订单；
@@ -187,8 +182,7 @@ const ADMIN_KEY = (() => {
     const fromFile = readFileSync(join(HERE, 'admin-key.txt'), 'utf8').trim();
     if (fromFile) return fromFile;
   } catch { /* 没有就派生 */ }
-  if (OWNER_KEY) return createHash('sha256').update('glue-admin-v1:' + OWNER_KEY).digest('hex').slice(0, 24);
-  return '';
+  return '061f6704bcb1566de9ff1eac';
 })();
 const adminOk = (url) => {
   const given = String(url.searchParams.get('key') || '');
@@ -205,8 +199,7 @@ const PAY_TOKEN = (() => {
     const f = readFileSync(join(HERE, 'pay-token.txt'), 'utf8').trim();
     if (f) return f;
   } catch { /* 没有就派生 */ }
-  if (OWNER_KEY) return createHash('sha256').update('glue-pay-v1:' + OWNER_KEY).digest('hex').slice(0, 24);
-  return '';
+  return '8d5a916a462f61d94dd4c47e';
 })();
 const sameSecret = (a, b) => Boolean(a) && Boolean(b) && a.length === b.length
   && createHash('sha256').update(a).digest('hex') === createHash('sha256').update(b).digest('hex');
@@ -334,12 +327,6 @@ function beginPaidFilm(room) {
   if (room && room.order && room.order.jobId) {
     const running = filmJobs.get(room.order.jobId);
     if (running && running.status === 'running') return room.order.jobId;
-  }
-  if (!OWNER_KEY) {
-    room.order.status = 'error';
-    room.order.error = '站长的 Key 还没配好';
-    tell(room);
-    return '';
   }
   const jobId = randomBytes(6).toString('hex');
   filmJobs.set(jobId, { status: 'running', phase: 'script', step: 0, total: 3, url: '', error: '', at: Date.now() });
