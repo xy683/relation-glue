@@ -475,10 +475,17 @@ async function runFilmJob(id, opts) {
     job.phase = 'done';
     job.status = 'done';
     job.url = '/films/' + picked + '.mp4';
+    let filmMs = 0;
+    try {
+      const probe = execFileSync('/usr/bin/ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', filmFile], { encoding: 'utf8' });
+      const sec = Number(String(probe).trim());
+      if (Number.isFinite(sec) && sec > 1) filmMs = Math.round(sec * 1000);
+    } catch { /* 取不到就用默认 */ }
     if (opts.roomId) {
       const r = rooms.get(opts.roomId);
       if (r && r.status !== 'chat' && r.status !== 'ended') {
         r.filmUrl = job.url;
+        r.filmMs = filmMs;
         if (r.order) r.order.status = 'done';
         if (r.joined.guest) startFilmWindow(r, 'both');
         else readyFilm(r);
@@ -599,9 +606,10 @@ function startFilmWindow(room, reason = 'guest') {
   room.filmStart = Date.now();
   room.filmReason = reason;
   room.readyDeadline = 0;
+  const windowMs = (Number(room.filmMs) > 3000 ? Number(room.filmMs) : FILM_WINDOW_MS) + 1500;
   room.timers.push(setTimeout(() => {
     if (room.status === 'film') { room.status = 'confirm'; tell(room); }
-  }, FILM_WINDOW_MS));
+  }, windowMs));
   tell(room);
 }
 function startChat(room) {

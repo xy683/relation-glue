@@ -1091,17 +1091,23 @@
     if (!a) return;
     a.volume = 0.42;
     a.loop = true;
-    /* 没有开关：进聊天就放；被浏览器拦了就等下一次点击/触摸继续放 */
-    const resumeOnTouch = () => {
-      const once = () => { try { a.play().catch(() => {}); } catch (e) { /* 忽略 */ } };
-      document.addEventListener('pointerdown', once, { once: true });
-      document.addEventListener('touchstart', once, { once: true });
-    };
-    const pr = a.play();
-    if (pr && pr.catch) pr.catch(resumeOnTouch);
+    try { a.load(); } catch (e) { /* 忽略 */ }
+    const tryPlay = () => { try { const pr = a.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) { /* 忽略 */ } };
+    tryPlay();
+    /* 浏览器拦了自动播放：之后任何一次点击/触摸/按键都再试一次，直到响起来 */
+    const retry = () => { tryPlay(); if (!a.paused) { document.removeEventListener('pointerdown', retry); document.removeEventListener('touchstart', retry); document.removeEventListener('keydown', retry); } };
+    document.addEventListener('pointerdown', retry);
+    document.addEventListener('touchstart', retry);
+    document.addEventListener('keydown', retry);
+    if (room.bgmTimer) clearInterval(room.bgmTimer);
+    room.bgmTimer = setInterval(() => {
+      if (room.view !== 'chat' || !a.paused) { clearInterval(room.bgmTimer); room.bgmTimer = 0; return; }
+      tryPlay();
+    }, 1500);
   }
   function stopChatBgm() {
     const a = chatBgmEl();
+    if (room.bgmTimer) { clearInterval(room.bgmTimer); room.bgmTimer = 0; }
     if (a) { try { a.pause(); } catch (e) { /* 忽略 */ } }
   }
   function startClock(state) {
