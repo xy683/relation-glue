@@ -1191,7 +1191,7 @@ const server = createServer(async (req, res) => {
       if (ok) {
         const room = orders.get(String(p.orderNo || ''));
         const amount = Number(p.amount || 0);
-        if (room && room.order && amount >= room.order.amount - 0.01 && room.status === 'waiting' && !room.filmUrl) beginPaidFilm(room);
+        if (room && room.order && Math.abs(amount - room.order.amount) < 0.005 && room.status === 'waiting' && !room.filmUrl) beginPaidFilm(room);
       }
       res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
       return res.end(ok ? 'success' : 'fail');
@@ -1206,7 +1206,7 @@ const server = createServer(async (req, res) => {
       if (ok && String(body.status) === 'OD') {
         const room = orders.get(String(body.trade_order_id || ''));
         const amount = Number(body.total_fee || 0);
-        if (room && room.order && amount >= room.order.amount - 0.01 && room.status === 'waiting' && !room.filmUrl) {
+        if (room && room.order && Math.abs(amount - room.order.amount) < 0.005 && room.status === 'waiting' && !room.filmUrl) {
           beginPaidFilm(room);
         }
       }
@@ -1246,7 +1246,7 @@ const server = createServer(async (req, res) => {
       const amount = Number(body.amount ?? body.price ?? body.total ?? body.money ?? body.total_fee ?? 0);
       const room = orders.get(no);
       if (!room || !room.order) return json(res, 404, { error: '没有这个订单。' });
-      if (!(amount >= room.order.amount - 0.01)) return json(res, 400, { error: '金额不对。' });
+      if (!(Math.abs(amount - room.order.amount) < 0.005)) return json(res, 400, { error: '金额不对。' });
       if (room.order.status === 'awaiting' || room.order.status === 'review' || room.order.status === 'failed') {
         if (room.status === 'waiting' && !room.filmUrl) beginPaidFilm(room);
       }

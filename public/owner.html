@@ -64,13 +64,14 @@
   function render(orders) {
     if (!orders.length) { list.innerHTML = '<p class="empty">还没有订单</p>'; return; }
     list.innerHTML = orders.map((o) => {
-      const waiting = o.status === 'review' || o.status === 'failed';
+      const waiting = o.status === 'review' || o.status === 'failed' || o.status === 'awaiting';
+      const action = o.status === 'failed' ? '重试生成' : (o.status === 'awaiting' ? '手动放行并生成' : '确认到账并生成');
       return '<div class="order ' + esc(o.status) + '">'
         + '<div class="row"><b>' + esc(o.names.me) + ' · ' + esc(o.names.partner) + '</b><span class="price">¥' + esc(o.amount) + '</span></div>'
         + '<div class="meta">订单 ' + esc(o.id) + ' · 房间 ' + esc(o.roomId) + ' · ' + esc(new Date(o.at).toLocaleString()) + '</div>'
         + '<div class="st">' + esc(label(o.status)) + '</div>'
-        + (waiting ? '<button data-act="confirm" data-id="' + esc(o.id) + '">' + (o.status === 'failed' ? '重试生成' : '确认到账并生成') + '</button>' : '')
-        + (o.status === 'review' ? '<button class="ghost" data-act="cancel" data-id="' + esc(o.id) + '">没收到，取消</button>' : '')
+        + (waiting ? '<button data-act="confirm" data-id="' + esc(o.id) + '">' + action + '</button>' : '')
+        + (o.status === 'review' || o.status === 'awaiting' ? '<button class="ghost" data-act="cancel" data-id="' + esc(o.id) + '">没收到，取消</button>' : '')
         + (o.error ? '<div class="err">' + esc(o.error) + '</div>' : '')
         + '</div>';
     }).join('');
