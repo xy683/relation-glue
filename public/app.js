@@ -857,7 +857,7 @@
     $('payStep1').classList.add('hidden');
     $('payStep2').classList.remove('hidden');
     const x = Boolean(room.state && room.state.payXunhu);
-    $('payState').textContent = x ? '选一种支付方式；付完自动到账，不用再操作。' : '扫码付 29.9 元。';
+    $('payState').textContent = x ? '选一种支付方式；付完自动到账，不用再操作。' : '扫码付 9.9 元。';
   }
   /** 选支付宝/微信：下单，拿到支付链接，跳过去付 */
   async function startChannel(channel) {

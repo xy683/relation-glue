@@ -170,10 +170,10 @@ const filmJobs = new Map();
 const OWNER_KEY = '';
 
 /* ── 先收钱，再生成 ─────────────────────────────────────
- * 一次成片 29.9 元（3 段 ×10 秒，480P）。顾客点「是」才建订单；
+ * 一次成片 9.9 元。顾客点「是」才建订单；
  * 站长在 /owner 页面确认到账之后，服务器才用 OWNER_KEY 调模型。
  * 管理口令不写进代码：由 owner-key.txt 派生，或环境变量 GLUE_ADMIN_KEY 指定。 */
-const ORDER_PRICE = 29.9;
+const ORDER_PRICE = 9.9;
 const orders = new Map();
 const ADMIN_KEY = (() => {
   const fromEnv = String(process.env.GLUE_ADMIN_KEY || '').trim();
@@ -1279,7 +1279,7 @@ const server = createServer(async (req, res) => {
         return json(res, 200, { ok: true, role, state: publicState(room) });
       }
 
-      /* 顾客点「是」：建一张 29.9 元的订单，等站长确认到账 */
+      /* 顾客点「是」：建一张 9.9 元的订单，等站长确认到账 */
       if (action === 'checkout' && req.method === 'POST') {
         const body = await readBody(req);
         const role = seatOf(room, body.role, body.token);
