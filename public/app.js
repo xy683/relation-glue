@@ -798,7 +798,7 @@
     const halfCheck = () => {
       const d = totalSec();
       if (!(d > 1)) return;
-      if (video.currentTime >= d * 0.5) showMidAsk();
+      if (video.currentTime >= d * 0.5) { showMidAsk(true); tellMid(); }
       if (video.currentTime >= d - 1.5) showMidAsk(true);
     };
     video.addEventListener('timeupdate', halfCheck);
@@ -1070,7 +1070,16 @@
   /* 看到一半的弹层：是 / 否 / 看完视频再使用 */
   let midShown = false;
   let pendingAnswer = '';
-  function resetMidAsk() { midShown = false; pendingAnswer = ''; $('midAsk')?.classList.add('hidden'); }
+  function resetMidAsk() { midShown = false; pendingAnswer = ''; toldMid = false; $('midAsk')?.classList.add('hidden'); }
+  let toldMid = false;
+  function tellMid() {
+    if (toldMid) return;
+    toldMid = true;
+    fetch('/api/rooms/' + room.id + '/mid', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ role: room.role, token: room.token }),
+    }).catch(() => {});
+  }
   function showMidAsk(force = false) {
     if (pendingAnswer) return;
     if (midShown && !force) return;

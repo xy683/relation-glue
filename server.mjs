@@ -1253,7 +1253,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { ok: true, status: room.order.status });
     }
 
-    const open = /^\/api\/rooms\/([A-Za-z0-9_-]{6,32})\/(state|events|join|confirm|message|offer|answer|checkout|paid|start)$/.exec(path);
+    const open = /^\/api\/rooms\/([A-Za-z0-9_-]{6,32})\/(state|events|join|confirm|message|offer|answer|checkout|paid|start|mid)$/.exec(path);
     if (open) {
       const room = roomFor(open[1]);
       if (!room) return json(res, 404, { error: '这间房已经不在了，链接也许过期了。' });
@@ -1339,6 +1339,14 @@ const server = createServer(async (req, res) => {
         beginPaidFilm(room);
         return json(res, 200, { ok: true, orderId: room.order.id });
       }
+      /* 任何一端滑到一半：通知两端弹「是否启动复原胶」 */
+      if (action === 'mid' && req.method === 'POST') {
+        const midBody = await readBody(req);
+        if (!seatOf(room, midBody.role, midBody.token)) return json(res, 403, { error: '这扇门不为这个身份打开。' });
+        if (room.status === 'film' && !room.midAsk) { room.midAsk = true; tell(room); }
+        return json(res, 200, { ok: true });
+      }
+
       if (action === 'confirm' && req.method === 'POST') {
         const body = await readBody(req);
         const role = seatOf(room, body.role, body.token);
