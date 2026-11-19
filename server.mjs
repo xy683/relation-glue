@@ -1164,6 +1164,16 @@ const server = createServer(async (req, res) => {
       return json(res, 201, { id, hostToken: room.hostToken });
     }
 
+    /* 站长上传幻境聊天背景音乐（一次性，管理员口令） */
+    if (path === '/api/admin/bgm' && req.method === 'POST') {
+      if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
+      const bytes = await readImage(req, 40 * 1024 * 1024);
+      if (!bytes.length) return json(res, 400, { error: '文件是空的。' });
+      const dir = join(PUBLIC, 'music');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'chat-bgm.mp3'), bytes);
+      return json(res, 200, { ok: true, bytes: bytes.length });
+    }
     /* 站长上传收款码（不进公开仓库，放在 public/pay/） */
     if (path === '/api/pay/qr' && req.method === 'POST') {
       if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
