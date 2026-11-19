@@ -722,7 +722,7 @@ function clearTimers(room) {
 }
 
 /** 成片好了、人还没齐：先把片子扣在手里，两分钟内等接收人进来 */
-const FILM_GRACE_MS = 2 * 60_000;
+const FILM_GRACE_MS = 5 * 60_000 + 20_000; /* 等 TA 5 分 20 秒 */
 /** 一支 30 秒的片子，多给一点缓冲时间，放完就弹确认面板 */
 const FILM_WINDOW_MS = 31_500;
 

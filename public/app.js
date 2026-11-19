@@ -813,6 +813,7 @@
     const modal = $('payModal');
     if (!modal) return;
     modal.classList.remove('hidden');
+    const cardO = document.querySelector('.pay-card'); if (cardO) cardO.classList.remove('generating');
     $('payStep1').classList.remove('hidden');
     $('payStep2').classList.add('hidden');
     $('payState').textContent = '';
@@ -891,6 +892,8 @@
   /** 已到账：先让客户看服务须知，确认后才开始烧算力 */
   function showNotice() {
     if (noticeOpen) return;
+    const cardN = document.querySelector('.pay-card'); if (cardN) cardN.classList.remove('generating');
+    const gnN = $('payGenNote'); if (gnN) gnN.classList.add('hidden');
     noticeOpen = true;
     const modal = $('payModal');
     if (!modal) return;
@@ -906,7 +909,10 @@
   }
   function showGenerating(text) {
     noticeOpen = true;
+    const card = document.querySelector('.pay-card');
+    if (card) card.classList.add('generating');
     const nt = $('payNotice'); if (nt) nt.classList.add('hidden');
+    const gn = $('payGenNote'); if (gn) gn.classList.remove('hidden');
     const el = $('payState');
     if (el) el.textContent = text || '视频正在生成中，由于使用人数过多，请耐心等待…';
   }

@@ -274,3 +274,15 @@ select { width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-
 .chat-bgm.hint { animation: bgmPulse 1.5s ease-in-out infinite; }
 @keyframes bgmPulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 
+
+.pay-gen-note { display: none; font-size: 13px; color: #6b5b50; margin: 8px 0 0; line-height: 1.8; }
+.pay-card.generating .pay-gen-note { display: block; }
+.pay-card.generating h2,
+.pay-card.generating .pay-tag,
+.pay-card.generating .pay-price,
+.pay-card.generating .pay-note,
+.pay-card.generating .pay-channels,
+.pay-card.generating .pay-qrs,
+.pay-card.generating .pay-fallback,
+.pay-card.generating .pay-notice { display: none !important; }
+
