@@ -178,7 +178,7 @@
     <!-- 聊天室 -->
     <div id="view-chat" class="chat hidden">
       <p class="ambient">当前记忆状态：初遇，后来的故事暂时还没有发生</p>
-      <div class="countdown"><span>幻境剩余</span><b id="clock">20:00</b></div>
+      <div class="countdown"><span>幻境剩余</span><b id="clock">20:00</b><button type="button" class="chat-bgm" id="chatBgmBtn" aria-label="背景音乐">🎵</button></div>
       <div class="messages" id="messages">
         <p class="empty" id="chatEmpty">你们刚刚认识。<br>说点什么都可以。</p>
       </div>
@@ -243,6 +243,7 @@
   </div>
 </div>
 
+<audio id="chatBgm" src="/music/chat-bgm.mp3" loop preload="auto"></audio>
 <script src="/music.js"></script>
 <script src="/film.js"></script>
 <script src="/app.js"></script>

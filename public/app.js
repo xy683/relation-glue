@@ -673,6 +673,7 @@
     } else if (state.status === 'declined') {
       pauseFilm();
       stopFilm();
+      stopChatBgm();
       show('declined');
       if (room.sse) room.sse.close();
     } else if (state.status === 'chat') {
@@ -686,6 +687,7 @@
     } else if (state.status === 'ended') {
       pauseFilm();
       stopFilm();
+      stopChatBgm();
       show('ended');
       if (room.sse) { room.sse.close(); room.sse = null; }
     }
@@ -1042,6 +1044,23 @@
     if (!quiet) $('messages').scrollTop = $('messages').scrollHeight;
   }
 
+  /* 幻境聊天的背景音乐：用站长上传的 20 分钟音轨 */
+  function chatBgmEl() { return $('chatBgm'); }
+  function startChatBgm() {
+    const a = chatBgmEl();
+    if (!a) return;
+    a.volume = 0.42;
+    const btn = $('chatBgmBtn');
+    const playing = a.play();
+    if (playing && playing.then) {
+      playing.then(() => { if (btn) btn.classList.add('on'); })
+        .catch(() => { if (btn) { btn.classList.remove('on'); btn.classList.add('hint'); } });
+    }
+  }
+  function stopChatBgm() {
+    const a = chatBgmEl();
+    if (a) { try { a.pause(); } catch (e) { /* 忽略 */ } }
+  }
   function startClock(state) {
     clearInterval(room.tick);
     const tick = () => {
@@ -1096,6 +1115,19 @@
   $('payDone')?.addEventListener('click', (e) => { e.preventDefault(); void payDone(); });
   $('payAlipay')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('alipay'); });
   $('payWechat')?.addEventListener('click', (e) => { e.preventDefault(); void startChannel('wechat'); });
+  $('chatBgmBtn')?.addEventListener('click', () => {
+    const a = chatBgmEl();
+    const btn = $('chatBgmBtn');
+    if (!a) return;
+    if (a.paused) {
+      a.volume = 0.42;
+      const pr = a.play();
+      if (pr && pr.then) pr.then(() => { if (btn) { btn.classList.add('on'); btn.classList.remove('hint'); } }).catch(() => {});
+    } else {
+      a.pause();
+      if (btn) btn.classList.remove('on');
+    }
+  });
   $('payNoticeOk')?.addEventListener('click', () => void acceptNotice());
   $('accept').addEventListener('click', () => void answer(true));
   $('decline').addEventListener('click', () => void answer(false));
