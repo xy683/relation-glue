@@ -510,6 +510,7 @@
   }
 
   async function openRoom(id) {
+    try { window.__stopIntro && window.__stopIntro(); } catch (e) { /* 忽略 */ }
     room.id = id;
     room.token = tokenFor(id);
     room.role = room.token ? 'host' : 'guest';
@@ -1260,6 +1261,39 @@
     };
     ['timeupdate', 'seeked', 'ended', 'loadedmetadata'].forEach((n) => fv && fv.addEventListener(n, midTick));
   } catch (e) { /* 忽略 */ }
+
+  /* 进站短片：自动播放，放完自动收起，不需要人点 */
+  (function intro() {
+    const box = $('intro');
+    const v = $('introVideo');
+    if (!box || !v) return;
+    let closed = false;
+    const finish = () => {
+      if (closed) return;
+      closed = true;
+      box.classList.add('hidden');
+      setTimeout(() => { try { v.pause(); } catch (e) { /* 忽略 */ } }, 400);
+    };
+    window.__stopIntro = finish;
+    v.addEventListener('ended', finish);
+    v.addEventListener('error', finish);
+    setTimeout(finish, 20000);
+    v.muted = false;
+    const pr = v.play();
+    const sound = $('introSound');
+    if (pr && pr.catch) {
+      pr.catch(() => {
+        v.muted = true;
+        v.play().catch(() => {});
+        if (sound) sound.classList.remove('hidden');
+      });
+    }
+    sound?.addEventListener('click', () => {
+      v.muted = false;
+      v.play().catch(() => {});
+      sound.classList.add('hidden');
+    });
+  })();
 
   $('payNoticeOk')?.addEventListener('click', () => void acceptNotice());
   $('accept').addEventListener('click', () => void answer(true));

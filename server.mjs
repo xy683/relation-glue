@@ -1101,7 +1101,7 @@ const server = createServer(async (req, res) => {
     if (path === '/api/admin/film' && req.method === 'POST') {
       if (!adminOk(url)) return json(res, 403, { error: '口令不对。' });
       const kind = String(req.headers['x-kind'] || '');
-      if (!['family', 'love', 'friend'].includes(kind)) return json(res, 400, { error: '不认识这个主题。' });
+      if (!['family', 'love', 'friend', 'intro'].includes(kind)) return json(res, 400, { error: '不认识这个主题。' });
       const bytes = await readImage(req, 80 * 1024 * 1024);
       if (!bytes.length) return json(res, 400, { error: '文件是空的。' });
       const dir = join(PUBLIC, 'films');
